@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from './AuthContext'
-import { apiFetch, getApiRoot } from './lib/api'
+import { apiFetch } from './lib/api'
 
 export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
   const { user, accessToken, signInWithGitHub, supabaseConfigured } = useAuth()
@@ -15,7 +15,7 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
       return
     }
     const q = new URLSearchParams({ file: selectedFile })
-    const url = `${getApiRoot()}${apiBase}/bess-results/download?${q}`
+    const url = `${apiBase}/bess-results/download?${q}`
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
@@ -71,7 +71,7 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
           <button
             type="button"
             className="btn btn--primary"
-            disabled={saving || !canSave}
+            disabled={saving || (user ? !canSave : false)}
             onClick={saveToAccount}
           >
             {saving

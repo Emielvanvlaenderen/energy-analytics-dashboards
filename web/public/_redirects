@@ -1,0 +1,3 @@
+# Processed from publish dir (web/dist). Proxies API to Render; SPA fallback last.
+/api/*  https://energy-analytics-api-5u38.onrender.com/api/:splat  200!
+/*      /index.html  200

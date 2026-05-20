@@ -126,11 +126,8 @@ Copy your Render URL, e.g. `https://energy-analytics-api.onrender.com`.
 
 **Option A — Recommended: Netlify proxy (same origin, simple cookies)**
 
-1. In Netlify → **Redirects**, add (replace host with your Render service):
-
-   ```
-   /api/*  https://energy-analytics-api.onrender.com/api/:splat  200
-   ```
+1. Redirects are in [`web/public/_redirects`](../web/public/_redirects) (copied into `dist` on build).  
+   **Important:** with publish dir `web/dist`, redirects in the repo-root `netlify.toml` are **not** applied — use `_redirects` in `public/`.
 
 2. Leave **`VITE_API_BASE_URL` unset** (empty). The UI calls `/api/...` on the Netlify domain; Netlify proxies to Render.
 
