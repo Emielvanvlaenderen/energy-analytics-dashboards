@@ -41,10 +41,14 @@ export function ensureGuestSession(req, res) {
   if (!valid) {
     id = crypto.randomUUID()
     const prod = process.env.NODE_ENV === 'production'
-    const crossOriginApi =
+    const origin = req.headers.origin
+    const host = req.headers.host || ''
+    // Netlify UI → Render API: Origin is netlify.app, Host is onrender.com.
+    const crossSite =
       prod &&
-      (process.env.CORS_ORIGINS || '').split(',').filter((s) => s.trim()).length > 0
-    const sameSite = crossOriginApi ? 'None' : 'Lax'
+      Boolean(origin) &&
+      !String(origin).includes(host.split(':')[0])
+    const sameSite = crossSite ? 'None' : 'Lax'
     const secure = prod ? '; Secure' : ''
     res.setHeader(
       'Set-Cookie',

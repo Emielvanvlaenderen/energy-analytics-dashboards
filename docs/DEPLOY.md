@@ -120,22 +120,19 @@ Copy your Render URL, e.g. `https://energy-analytics-api.onrender.com`.
 |----------|--------|
 | `VITE_SUPABASE_URL` | Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon key |
-| `VITE_API_BASE_URL` | See **API routing** below |
+| `VITE_API_BASE_URL` | Set in `web/netlify.toml` (Render URL). **Do not** add in Netlify UI (would duplicate). |
 
-### 3.3 API routing (choose one)
+### 3.3 API routing
 
-**Option A — Recommended: Netlify proxy (same origin, simple cookies)**
+**Default (in repo): direct Render URL** — [`web/netlify.toml`](../web/netlify.toml) sets `VITE_API_BASE_URL` to your Render service. The UI calls Render directly; no Netlify `/api` proxy needed.
 
-1. Redirects are in [`web/public/_redirects`](../web/public/_redirects) (copied into `dist` on build).  
-   **Important:** with publish dir `web/dist`, redirects in the repo-root `netlify.toml` are **not** applied — use `_redirects` in `public/`.
+On Render set:
 
-2. Leave **`VITE_API_BASE_URL` unset** (empty). The UI calls `/api/...` on the Netlify domain; Netlify proxies to Render.
+```text
+CORS_ORIGINS=https://emiel-energy-analytics.netlify.app,http://localhost:5173
+```
 
-**Option B — Direct API URL**
-
-1. Set `VITE_API_BASE_URL=https://energy-analytics-api.onrender.com` (no trailing slash).
-2. Ensure `CORS_ORIGINS` on Render includes your Netlify URL exactly.
-3. Guest cookies use `SameSite=None; Secure` when `CORS_ORIGINS` is set (already handled in `workspaceCore.mjs`).
+**Optional:** Netlify proxy — remove `VITE_API_BASE_URL` from `web/netlify.toml` and use [`web/public/_redirects`](../web/public/_redirects) only.
 
 ### 3.4 Deploy
 

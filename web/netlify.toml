@@ -5,6 +5,8 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # Call Render API directly (avoids Netlify /api proxy 404). Do not set in Netlify UI.
+  VITE_API_BASE_URL = "https://energy-analytics-api-5u38.onrender.com"
 
 [[redirects]]
   from = "/api/*"

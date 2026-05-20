@@ -18,7 +18,7 @@ services:
       - key: PYTHON
         value: python3
       - key: CORS_ORIGINS
-        sync: false
+        value: https://emiel-energy-analytics.netlify.app,http://localhost:5173
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_ANON_KEY
