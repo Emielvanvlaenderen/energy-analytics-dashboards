@@ -4,7 +4,8 @@ import { AlertModal } from './AlertModal'
 import { SimulationNameModal } from './SimulationNameModal'
 import { BRAND } from './brand'
 import { useStudyInputs } from './StudyInputsContext'
-import { projectFetch } from './lib/api'
+import { jsonBodyWithGuest, projectFetch } from './lib/api'
+import { buildStudySnapshot } from './lib/studySnapshot'
 import { useProjectApi } from './useProjectApi'
 import { useSolutionPaths } from './useSolutionPaths'
 
@@ -84,7 +85,11 @@ export function BessSimulationPage() {
   const apiBase = useProjectApi()
   const paths = useSolutionPaths()
   const {
+    importNonEnergy,
+    duos,
+    bandMatrix,
     siteImportExportLimitsMw,
+    siteDataForm,
     bessSimulationInputs,
     setBessSimulationInputs,
     setBessSimulationCommitted,
@@ -163,28 +168,20 @@ export function BessSimulationPage() {
 
     setSimulateLoading(true)
     try {
-      const saveRes = await projectFetch(`${apiBase}/study-inputs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          siteImportExportLimitsMw,
-          bessSimulationCommitted: committed,
-          simulationName,
-        }),
+      const studySnapshot = buildStudySnapshot({
+        importNonEnergy,
+        duos,
+        bandMatrix,
+        siteImportExportLimitsMw,
+        siteDataForm,
+        bessSimulationCommitted: committed,
+        simulationName,
       })
-      const saveData = await saveRes.json().catch(() => ({}))
-      if (!saveRes.ok || !saveData.ok) {
-        setModalTitle('Cannot save inputs')
-        setModalMessage(
-          typeof saveData.error === 'string'
-            ? saveData.error
-            : 'Failed to save study_inputs.json.',
-        )
-        return
-      }
 
       const runRes = await projectFetch(`${apiBase}/run-bess-optimisation`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: jsonBodyWithGuest({ studySnapshot }),
       })
       const runData = await runRes.json().catch(() => ({}))
       if (!runRes.ok || !runData.ok) {

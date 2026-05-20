@@ -9,7 +9,14 @@ import {
 } from './pvYieldSynthetic.mjs'
 
 export const GUEST_COOKIE = 'ea_guest'
+export const GUEST_HEADER = 'x-ea-guest'
 const GUEST_MAX_AGE_MS = 72 * 60 * 60 * 1000
+const GUEST_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function isGuestUuid(value) {
+  return typeof value === 'string' && GUEST_UUID_RE.test(value) && value.length <= 64
+}
 
 export function getDataRoot() {
   return process.env.DATA_ROOT || path.join(REPO_ROOT, '.data')
@@ -33,17 +40,25 @@ export function parseCookies(header) {
   return out
 }
 
-export function ensureGuestSession(req, res) {
+/** Cookie, X-EA-Guest header, or JSON body (cross-origin cookies often blocked). */
+export function resolveGuestSessionId(req) {
   const cookies = parseCookies(req.headers.cookie)
-  let id = cookies[GUEST_COOKIE]
-  const valid =
-    typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id) && id.length <= 64
-  if (!valid) {
+  if (isGuestUuid(cookies[GUEST_COOKIE])) return cookies[GUEST_COOKIE]
+  const header = req.headers[GUEST_HEADER]
+  if (isGuestUuid(header)) return header
+  const bodyId = req.body?.guestSessionId
+  if (isGuestUuid(bodyId)) return bodyId
+  return null
+}
+
+export function ensureGuestSession(req, res) {
+  let id = resolveGuestSessionId(req)
+  const isNew = !isGuestUuid(id)
+  if (isNew) {
     id = crypto.randomUUID()
     const prod = process.env.NODE_ENV === 'production'
     const origin = req.headers.origin
     const host = req.headers.host || ''
-    // Netlify UI → Render API: Origin is netlify.app, Host is onrender.com.
     const crossSite =
       prod &&
       Boolean(origin) &&
@@ -56,6 +71,7 @@ export function ensureGuestSession(req, res) {
     )
   }
   req.guestSessionId = id
+  res.setHeader('X-EA-Guest', id)
 }
 
 export function resolveProjectPaths(projectId, workspaceId) {

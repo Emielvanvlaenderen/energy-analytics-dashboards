@@ -209,12 +209,16 @@ export function createProjectApiRouter() {
     req.setTimeout(0)
     res.setTimeout(0)
     const result = await (req.paths?.projectKind === 'v2g'
-      ? executeRunV2gOptimisation(req.projectId, ws(req))
-      : executeRunBessOptimisation(req.projectId, ws(req)))
+      ? executeRunV2gOptimisation(req.projectId, req.body, ws(req))
+      : executeRunBessOptimisation(req.projectId, req.body, ws(req)))
     if (!result.ok) {
       return res.status(result.status).json({
         ok: false,
         error: result.error,
+        workspaceId: result.workspaceId,
+        guestSessionId: result.guestSessionId,
+        studyInputsPath: result.studyInputsPath,
+        fileExists: result.fileExists,
         stdout: result.stdout,
         stderr: result.stderr,
       })

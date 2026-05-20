@@ -87,11 +87,12 @@ export function applyApiCors(app) {
     if (allow && origin) {
       res.setHeader('Access-Control-Allow-Origin', origin)
       res.setHeader('Access-Control-Allow-Credentials', 'true')
+      res.setHeader('Access-Control-Expose-Headers', 'X-EA-Guest')
       res.setHeader('Vary', 'Origin')
     }
     res.setHeader(
       'Access-Control-Allow-Headers',
-      'Content-Type, Authorization',
+      'Content-Type, Authorization, X-EA-Guest',
     )
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS')
     if (req.method === 'OPTIONS') {

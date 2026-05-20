@@ -5,6 +5,7 @@ import {
   projectNotFound,
   resolveProjectPaths,
 } from './projectPaths.mjs'
+import { guestSessionIdFromPaths } from './persistStudyInputsForRun.mjs'
 
 export const STUDY_INPUTS_FILENAME = 'study_inputs.json'
 
@@ -73,7 +74,13 @@ export function executeGetStudyInputs(projectId, { paths: pathsIn } = {}) {
 
   try {
     const study = readStudyInputsSync(paths.studyInputsPath)
-    return { ok: true, status: 200, study }
+    return {
+      ok: true,
+      status: 200,
+      study,
+      workspaceId: paths.workspaceId,
+      guestSessionId: guestSessionIdFromPaths(paths),
+    }
   } catch (e) {
     console.error(e)
     return {
@@ -181,6 +188,8 @@ export function executeSaveStudyInputs(projectId, body, { paths: pathsIn } = {})
       status: 200,
       file: STUDY_INPUTS_FILENAME,
       directory: paths.optimisationDir,
+      workspaceId: paths.workspaceId,
+      guestSessionId: guestSessionIdFromPaths(paths),
     }
   } catch (e) {
     console.error(e)

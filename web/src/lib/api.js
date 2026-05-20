@@ -7,9 +7,53 @@ export function getApiRoot() {
   return trimmed.replace(/\/$/, '')
 }
 
-/** fetch with session cookie (guest or future server session). */
+import { readStoredGuestId, storeGuestId } from './guestSession.js'
+
+function rememberGuestFromJson(data) {
+  if (data?.guestSessionId) storeGuestId(data.guestSessionId)
+}
+
+/** JSON POST body with stable guestSessionId (cookies often blocked Netlify → Render). */
+export function jsonBodyWithGuest(payload) {
+  const guestId = readStoredGuestId()
+  if (!guestId) return JSON.stringify(payload)
+  return JSON.stringify({ ...payload, guestSessionId: guestId })
+}
+
+/** fetch with guest cookie + X-EA-Guest header + guestSessionId in JSON bodies. */
 export function projectFetch(url, init = {}) {
-  return fetch(url, { credentials: 'include', ...init })
+  const headers = new Headers(init.headers || {})
+  const guestId = readStoredGuestId()
+  if (guestId) headers.set('X-EA-Guest', guestId)
+
+  let body = init.body
+  if (guestId && typeof body === 'string') {
+    try {
+      const parsed = JSON.parse(body)
+      if (parsed && typeof parsed === 'object' && !parsed.guestSessionId) {
+        body = JSON.stringify({ ...parsed, guestSessionId: guestId })
+      }
+    } catch {
+      /* not JSON */
+    }
+  }
+
+  return fetch(url, { ...init, headers, body, credentials: 'include' }).then(
+    async (res) => {
+      const returned = res.headers.get('X-EA-Guest')
+      if (returned) storeGuestId(returned)
+
+      if (res.ok) {
+        try {
+          const data = await res.clone().json()
+          rememberGuestFromJson(data)
+        } catch {
+          /* not JSON */
+        }
+      }
+      return res
+    },
+  )
 }
 
 /** Parse JSON API body; surface HTML/proxy errors as readable messages. */
@@ -31,6 +75,7 @@ export async function parseApiResponse(res) {
           : `HTTP ${res.status}${snippet ? ` — ${snippet}` : ''}`,
     }
   }
+  rememberGuestFromJson(data)
   return { res, data }
 }
 
@@ -42,7 +87,12 @@ export function formatApiError(res, data, fallback) {
       'Limits reset monthly.'
     )
   }
-  if (typeof data?.error === 'string' && data.error) return data.error
+  if (typeof data?.error === 'string' && data.error) {
+    if (data.guestSessionId && data.workspaceId) {
+      return `${data.error} (workspace: ${data.workspaceId})`
+    }
+    return data.error
+  }
   if (typeof data?.message === 'string' && data.message) return data.message
   if (res.status === 502 || res.status === 503) {
     return 'API server is waking up or unavailable (Render free tier). Wait 30–60 seconds, or check Render dashboard.'

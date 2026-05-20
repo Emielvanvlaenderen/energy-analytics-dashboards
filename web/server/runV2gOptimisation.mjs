@@ -1,23 +1,31 @@
 import { spawn } from 'child_process'
 import fs from 'fs'
-import {
-  projectNotAvailable,
-  projectNotFound,
-  resolveProjectPaths,
-} from './projectPaths.mjs'
+import { projectNotAvailable } from './projectPaths.mjs'
 import { isProjectAvailable } from './projectsRegistry.mjs'
+import {
+  persistStudyInputsBeforeRun,
+  studyInputsMissingResponse,
+} from './persistStudyInputsForRun.mjs'
 
-export function executeRunV2gOptimisation(projectId, { paths: pathsIn } = {}) {
-  const paths = pathsIn ?? resolveProjectPaths(projectId)
-  if (!paths) return Promise.resolve(projectNotFound(projectId))
+export function executeRunV2gOptimisation(projectId, body, { paths: pathsIn } = {}) {
+  const paths = pathsIn
+  if (!paths?.studyInputsPath) {
+    return Promise.resolve({
+      ok: false,
+      status: 500,
+      error: 'Server misconfiguration: workspace paths missing on optimisation run.',
+    })
+  }
   if (!isProjectAvailable(projectId)) {
     return Promise.resolve(projectNotAvailable(projectId))
   }
 
+  const saved = persistStudyInputsBeforeRun(projectId, body, paths)
+  if (!saved.ok) return Promise.resolve(saved)
+
   if (!fs.existsSync(paths.studyInputsPath)) {
     return Promise.resolve({
-      ok: false,
-      status: 400,
+      ...studyInputsMissingResponse(paths),
       error:
         'Study inputs have not been submitted. Complete Grid tariffs, Site data, and V2G simulation, then save before running.',
     })

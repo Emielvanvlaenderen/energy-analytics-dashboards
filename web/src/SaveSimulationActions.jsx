@@ -40,9 +40,9 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
           file: selectedFile,
         }),
       })
-      const data = await res.json().catch(() => ({}))
+      const { data } = await parseApiResponse(res)
       if (!res.ok || !data.ok) {
-        setMessage(data.error || 'Could not save.')
+        setMessage(formatApiError(res, data, 'Could not save.'))
         return
       }
       setMessage('Saved to your account.')
