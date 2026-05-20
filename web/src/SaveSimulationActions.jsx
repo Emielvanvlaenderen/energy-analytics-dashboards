@@ -7,6 +7,7 @@ import {
   projectFetch,
 } from './lib/api'
 import { readStoredGuestId } from './lib/guestSession'
+import { supabase } from './lib/supabaseClient'
 
 export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
   const { user, accessToken, signInWithGitHub, supabaseConfigured } = useAuth()
@@ -15,6 +16,20 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
   const [message, setMessage] = useState(null)
 
   const canSave = Boolean(saveLabel?.trim() && selectedFile)
+
+  async function resolveAccessToken() {
+    if (supabase) {
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (sessionData.session?.access_token) {
+        return sessionData.session.access_token
+      }
+      const { data: refreshed } = await supabase.auth.refreshSession()
+      if (refreshed.session?.access_token) {
+        return refreshed.session.access_token
+      }
+    }
+    return accessToken
+  }
 
   async function downloadGuestCsv() {
     if (!selectedFile) {
@@ -64,8 +79,16 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
     setSaving(true)
     setMessage(null)
     try {
-      const headers = { 'Content-Type': 'application/json' }
-      if (accessToken) headers.Authorization = `Bearer ${accessToken}`
+      const token = await resolveAccessToken()
+      if (!token) {
+        setMessage('Session expired. Sign out, then sign in with GitHub again.')
+        return
+      }
+
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      }
 
       const res = await projectFetch(`${apiBase}/saved-simulations`, {
         method: 'POST',

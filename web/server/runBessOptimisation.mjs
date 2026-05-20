@@ -6,7 +6,7 @@ import {
   persistStudyInputsBeforeRun,
   studyInputsMissingResponse,
 } from './persistStudyInputsForRun.mjs'
-import { syncTemplateMarketDataFiles } from './workspaceCore.mjs'
+import { refreshMarketDataForStudy } from './workspaceCore.mjs'
 
 /**
  * Runs `projects/{id}/optimisation/run_optimisation_from_study.py`.
@@ -25,14 +25,20 @@ export function executeRunBessOptimisation(projectId, body, { paths: pathsIn } =
     return Promise.resolve(projectNotAvailable(projectId))
   }
 
-  syncTemplateMarketDataFiles(paths)
-
   const saved = persistStudyInputsBeforeRun(projectId, body, paths)
   if (!saved.ok) return Promise.resolve(saved)
 
   if (!fs.existsSync(paths.studyInputsPath)) {
     return Promise.resolve(studyInputsMissingResponse(paths))
   }
+
+  let study = null
+  try {
+    study = JSON.parse(fs.readFileSync(paths.studyInputsPath, 'utf8'))
+  } catch {
+    /* optional */
+  }
+  refreshMarketDataForStudy(paths, study)
 
   if (!fs.existsSync(paths.runScript)) {
     return Promise.resolve({

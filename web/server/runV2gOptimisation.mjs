@@ -6,7 +6,7 @@ import {
   persistStudyInputsBeforeRun,
   studyInputsMissingResponse,
 } from './persistStudyInputsForRun.mjs'
-import { syncTemplateMarketDataFiles } from './workspaceCore.mjs'
+import { refreshMarketDataForStudy } from './workspaceCore.mjs'
 
 export function executeRunV2gOptimisation(projectId, body, { paths: pathsIn } = {}) {
   const paths = pathsIn
@@ -21,8 +21,6 @@ export function executeRunV2gOptimisation(projectId, body, { paths: pathsIn } = 
     return Promise.resolve(projectNotAvailable(projectId))
   }
 
-  syncTemplateMarketDataFiles(paths)
-
   const saved = persistStudyInputsBeforeRun(projectId, body, paths)
   if (!saved.ok) return Promise.resolve(saved)
 
@@ -33,6 +31,14 @@ export function executeRunV2gOptimisation(projectId, body, { paths: pathsIn } = 
         'Study inputs have not been submitted. Complete Grid tariffs, Site data, and V2G simulation, then save before running.',
     })
   }
+
+  let study = null
+  try {
+    study = JSON.parse(fs.readFileSync(paths.studyInputsPath, 'utf8'))
+  } catch {
+    /* optional */
+  }
+  refreshMarketDataForStudy(paths, study)
 
   const script = paths.runScript
   if (!fs.existsSync(script)) {

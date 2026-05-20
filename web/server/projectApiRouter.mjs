@@ -40,9 +40,12 @@ function requireProject(req, res, next) {
 
 function requireAuth(req, res, next) {
   if (!req.authUser) {
+    const hasBearer = /^Bearer\s+\S+/i.test(req.headers.authorization || '')
     return res.status(401).json({
       ok: false,
-      error: 'Sign in with GitHub to save simulations to your account.',
+      error: hasBearer
+        ? 'Session could not be verified on the API. Sign out and sign in again. If this persists, check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or ANON_KEY) on Render.'
+        : 'Sign in with GitHub to save simulations to your account.',
     })
   }
   if (!isSupabaseConfigured()) {
@@ -96,10 +99,11 @@ export function createProjectApiRouter() {
   router.get('/bess-results', (req, res) => {
     const file =
       typeof req.query.file === 'string' ? req.query.file : undefined
+    const resultPaths = { paths: resolveResultsPaths(req) }
     const result =
       req.paths?.projectKind === 'v2g'
-        ? executeGetV2gResults(req.projectId, { file }, ws(req))
-        : executeGetBessResults(req.projectId, { file }, ws(req))
+        ? executeGetV2gResults(req.projectId, { file }, resultPaths)
+        : executeGetBessResults(req.projectId, { file }, resultPaths)
     if (!result.ok) {
       return res.status(result.status).json({ ok: false, error: result.error })
     }

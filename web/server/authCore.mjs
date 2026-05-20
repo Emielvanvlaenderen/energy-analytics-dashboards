@@ -22,17 +22,27 @@ export function isSupabaseConfigured() {
   )
 }
 
+function createAuthVerifierClient() {
+  const url = process.env.SUPABASE_URL
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+  if (!url || !key) return null
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+}
+
 /** @returns {Promise<{ id: string, email?: string, user_metadata?: object } | null>} */
 export async function verifyBearerToken(req) {
   const header = req.headers.authorization || ''
   const match = /^Bearer\s+(.+)$/i.exec(header)
   if (!match) return null
 
-  const admin = getSupabaseAdmin()
-  if (!admin) return null
+  const client = getSupabaseAdmin() || createAuthVerifierClient()
+  if (!client) return null
 
   const token = match[1].trim()
-  const { data, error } = await admin.auth.getUser(token)
+  const { data, error } = await client.auth.getUser(token)
   if (error || !data?.user) return null
   return data.user
 }

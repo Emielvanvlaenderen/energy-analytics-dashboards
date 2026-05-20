@@ -6,6 +6,7 @@ import { getProjectById } from './projectsRegistry.mjs'
 import {
   PV_YIELD_FILE_CANDIDATES,
   SHARED_PV_YIELD_DATA_DIR,
+  writePvSyntheticFromYield,
 } from './pvYieldSynthetic.mjs'
 
 export const GUEST_COOKIE = 'ea_guest'
@@ -67,20 +68,30 @@ export function resolveResultsPaths(req) {
   return req.paths ?? null
 }
 
-const MARKET_DATA_FILES = [
-  'day-ahead-prices.csv',
-  'site_pv_generation_synthetic_mw.csv',
-]
+/** Copy extended day-ahead prices from repo template into this workspace. */
+export function syncDayAheadFromTemplate(paths) {
+  const src = path.join(paths.templateRoot, 'data', 'day-ahead-prices.csv')
+  const dest = path.join(paths.dataDir, 'day-ahead-prices.csv')
+  if (!fs.existsSync(src)) return
+  fs.mkdirSync(paths.dataDir, { recursive: true })
+  fs.copyFileSync(src, dest)
+}
 
-/** Refresh long-horizon market/PV series from repo template (fixes clipped results). */
-export function syncTemplateMarketDataFiles(paths) {
-  for (const name of MARKET_DATA_FILES) {
-    const src = path.join(paths.templateRoot, 'data', name)
-    const dest = path.join(paths.dataDir, name)
-    if (!fs.existsSync(src)) continue
-    fs.mkdirSync(paths.dataDir, { recursive: true })
-    fs.copyFileSync(src, dest)
-  }
+/** Rebuild PV synthetic from yield through series end (study installed MW). */
+export function refreshPvFromStudy(paths, study) {
+  const form = study?.siteDataForm
+  if (form?.pvChoice !== 'yes') return
+  const mw = Number.parseFloat(String(form.pvInstalledMw ?? ''))
+  if (!Number.isFinite(mw) || mw <= 0) return
+  writePvSyntheticFromYield(paths.dataDir, mw, [
+    path.join(paths.templateRoot, 'data'),
+  ])
+}
+
+/** Day-ahead from template; PV regenerated from study (yield extended to series end). */
+export function refreshMarketDataForStudy(paths, study) {
+  syncDayAheadFromTemplate(paths)
+  refreshPvFromStudy(paths, study)
 }
 
 export function ensureGuestSession(req, res) {

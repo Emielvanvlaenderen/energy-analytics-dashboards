@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { DateTime } from 'luxon'
 import { rowsToPowerCsv } from './generateConstantMwSeries.mjs'
+import { defaultSeriesEndLondon } from './seriesRange.mjs'
 import { PROJECTS_DIR } from './repoRoot.mjs'
 
 export const PV_SYNTHETIC_FILENAME = 'site_pv_generation_synthetic_mw.csv'
@@ -62,6 +63,28 @@ export function parseYieldCsvFile(filePath) {
  * Power (MW) = (yield_pct / 100) × installed_mw for each interval.
  * Timestamps follow the yield file (GMT); local column is Europe/London.
  */
+/** Forward-fill yield through last completed half-hour (matches consumption series end). */
+export function extendYieldRowsToSeriesEnd(yieldRows) {
+  if (!yieldRows?.length) return yieldRows
+  const end = defaultSeriesEndLondon()
+  if (!end) return yieldRows
+
+  const last = yieldRows[yieldRows.length - 1]
+  let dt = DateTime.fromISO(last.datetime_gmt, { zone: 'utc' })
+  if (!dt.isValid) return yieldRows
+
+  const out = [...yieldRows]
+  dt = dt.plus({ minutes: 30 })
+  while (dt <= end) {
+    out.push({
+      datetime_gmt: dt.toFormat("yyyy-MM-dd'T'HH:mm:ss'Z'"),
+      yieldPct: last.yieldPct,
+    })
+    dt = dt.plus({ minutes: 30 })
+  }
+  return out
+}
+
 export function powerRowsFromYield(yieldRows, installedMw) {
   return yieldRows.map(({ datetime_gmt, yieldPct }) => {
     const utc = DateTime.fromISO(datetime_gmt, { zone: 'utc' })
@@ -88,7 +111,7 @@ export function writePvSyntheticFromYield(dataDir, installedMw, extraSearchDirs 
     }
   }
 
-  const yieldRows = parseYieldCsvFile(src)
+  const yieldRows = extendYieldRowsToSeriesEnd(parseYieldCsvFile(src))
   const rows = powerRowsFromYield(yieldRows, installedMw)
   fs.mkdirSync(dataDir, { recursive: true })
   const outPath = path.join(dataDir, PV_SYNTHETIC_FILENAME)
