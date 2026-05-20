@@ -1,0 +1,5 @@
+# Install: python3 -m pip install -r requirements.txt   (use python3 -m pip if `pip` is not found)
+# Core stack: PuLP (open-source MILP) with the CBC solver shipped by PuLP.
+pandas>=2.0
+numpy>=1.24
+pulp>=2.7

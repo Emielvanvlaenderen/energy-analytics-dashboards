@@ -1,0 +1,15 @@
+{
+  "name": "energy-analytics-dashboards",
+  "private": true,
+  "description": "Energy analytics dashboards — multi-platform UI and project workspaces",
+  "scripts": {
+    "install:web": "npm install --prefix web",
+    "dev": "npm run dev --prefix web",
+    "dev:with-api": "npm run dev:with-api --prefix web",
+    "dev:server": "npm run dev:server --prefix web",
+    "build": "npm run build --prefix web",
+    "preview": "npm run preview --prefix web",
+    "lint": "npm run lint --prefix web",
+    "test:continue": "npm run test:continue --prefix web"
+  }
+}

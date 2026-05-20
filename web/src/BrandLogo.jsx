@@ -1,0 +1,25 @@
+/** Header monogram — path-based EA (matches favicon; no font dependency) */
+
+export function BrandLogo({ className = 'brand__logo' }) {
+  return (
+    <svg
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      width={32}
+      height={32}
+      viewBox="0 0 32 32"
+      fill="none"
+      role="img"
+      aria-hidden="true"
+    >
+      <rect width="32" height="32" rx="8" fill="#1B4332" />
+      <g fill="#D8F3DC" transform="translate(0 0.5) scale(1.06) translate(-1 -0.5)">
+        <rect x="5" y="8.5" width="2.4" height="15" rx="0.4" />
+        <rect x="5" y="8.5" width="9" height="2.4" rx="0.4" />
+        <rect x="5" y="14.8" width="7" height="2.2" rx="0.4" />
+        <rect x="5" y="21.1" width="9" height="2.4" rx="0.4" />
+        <path d="M17.2 23.5 20.8 8.5h2.1L26.5 23.5h-2.3l-.7-3.2h-4.4l-.7 3.2zm3.1-5.2h3.5l-1.75-7.2z" />
+      </g>
+    </svg>
+  )
+}
