@@ -29,12 +29,29 @@ export function formatSimulationGroupOption(group) {
   if (run?.isPreRun || group.simulationName === 'Pre-run_demo') {
     return 'Pre-run (demo)'
   }
-  const name =
-    group.simulationName === '(unnamed)'
-      ? 'Previous runs (no name)'
-      : group.simulationName.replace(/_/g, ' ')
-  const tag = run?.siteDataLabel
-  return tag ? `${name} — ${tag}` : name
+  if (group.simulationName === '(unnamed)') {
+    return 'Previous runs (no name)'
+  }
+  return group.simulationName.replace(/_/g, ' ')
+}
+
+/** Account save label: simulation name + run parameters (max 64 chars). */
+export function buildSavedSimulationName(
+  simulationName,
+  parametersDisplay,
+  parametersLabel,
+) {
+  const params = (parametersDisplay || parametersLabel || '').trim()
+  let name =
+    simulationName && simulationName !== '(unnamed)'
+      ? simulationName.replace(/_/g, ' ')
+      : null
+  if (simulationName === 'Pre-run_demo') name = 'Pre-run (demo)'
+  let label = ''
+  if (name && params) label = `${name} — ${params}`
+  else if (name) label = name
+  else label = params || 'Saved run'
+  return label.length > 64 ? label.slice(0, 64) : label
 }
 
 /** Run picker label (server builds parametersDisplay; this is a fallback). */

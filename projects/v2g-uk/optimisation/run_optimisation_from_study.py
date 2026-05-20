@@ -46,19 +46,7 @@ def main() -> int:
     results_dir.mkdir(parents=True, exist_ok=True)
 
     v2g = ctx.v2g
-    form = study.get("siteDataForm") or {}
-    site_tags = []
-    if form.get("pvChoice") == "yes":
-        site_tags.append("pvY")
-    elif form.get("pvChoice") == "no":
-        site_tags.append("pvN")
-    if form.get("consumptionChoice") == "yes":
-        site_tags.append("loadY")
-    elif form.get("consumptionChoice") == "no":
-        site_tags.append("loadN")
-
     stem_parts = [
-        *site_tags,
         "v2g_wholesale",
         _slug(v2g["startDate"]),
         _slug(v2g["endDate"]),

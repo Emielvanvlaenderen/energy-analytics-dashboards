@@ -2,6 +2,16 @@ import crypto from 'crypto'
 import fs from 'fs'
 import { executeDownloadResults } from './bessResultsCore.mjs'
 import { getSupabaseAdmin, isSupabaseConfigured } from './authCore.mjs'
+import {
+  buildSavedSimulationName,
+  formatParametersLabel,
+  parseSimulationFilename,
+} from './simulationFilename.mjs'
+import {
+  buildParametersDisplay,
+  readSiteDataForm,
+  resolveSiteDataFlags,
+} from './siteDataLabels.mjs'
 
 const BUCKET = 'simulation-results'
 
@@ -42,17 +52,32 @@ export async function executeSaveCurrentSimulation(
     }
   }
 
-  const name =
+  const dl = executeDownloadResults(projectId, { file: body?.file }, { paths })
+  if (!dl.ok) {
+    return { ok: false, status: dl.status, error: dl.error }
+  }
+
+  let name =
     typeof body?.name === 'string' && body.name.trim()
       ? body.name.trim().slice(0, 64)
       : null
   if (!name) {
-    return { ok: false, status: 400, error: 'Provide a name for this saved run.' }
+    const parsed = parseSimulationFilename(dl.filename)
+    const siteForm = readSiteDataForm(paths)
+    const flags = resolveSiteDataFlags(parsed.parametersLabel, siteForm)
+    const parametersDisplay = buildParametersDisplay(
+      parsed.parametersLabel,
+      flags,
+      formatParametersLabel,
+    )
+    name = buildSavedSimulationName(
+      parsed.simulationName,
+      parametersDisplay,
+      parsed.parametersLabel,
+    )
   }
-
-  const dl = executeDownloadResults(projectId, { file: body?.file }, { paths })
-  if (!dl.ok) {
-    return { ok: false, status: dl.status, error: dl.error }
+  if (!name) {
+    return { ok: false, status: 400, error: 'Could not derive a name for this run.' }
   }
 
   let study = null

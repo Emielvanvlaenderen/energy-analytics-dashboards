@@ -68,19 +68,7 @@ def main() -> int:
 
     cap_mw = float(bess["capacityMw"])
     dur_h = int(bess["durationHours"])
-    form = study.get("siteDataForm") or {}
-    site_tags = []
-    if form.get("pvChoice") == "yes":
-        site_tags.append("pvY")
-    elif form.get("pvChoice") == "no":
-        site_tags.append("pvN")
-    if form.get("consumptionChoice") == "yes":
-        site_tags.append("loadY")
-    elif form.get("consumptionChoice") == "no":
-        site_tags.append("loadN")
-
     stem_parts = [
-        *site_tags,
         "bess_auction",
         _slug(bess["startDate"]),
         _slug(bess["endDate"]),

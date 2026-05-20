@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactEcharts from 'echarts-for-react'
 import { BRAND, BRAND_ACCENT } from './brand'
 import {
+  buildSavedSimulationName,
   findSimulationMeta,
   formatRunOptionLabel,
   formatSimulationGroupOption,
@@ -478,6 +479,16 @@ export function V2gResultsPage() {
     return g?.runs ?? []
   }, [groups, selectedSimulationName])
 
+  const saveLabel = useMemo(() => {
+    const meta = selectedFile ? findSimulationMeta(simulations, selectedFile) : null
+    if (!meta) return ''
+    return buildSavedSimulationName(
+      meta.simulationName,
+      meta.parametersDisplay,
+      meta.parametersLabel,
+    )
+  }, [simulations, selectedFile])
+
   const socOption = useMemo(
     () =>
       buildSocOption(
@@ -612,16 +623,6 @@ export function V2gResultsPage() {
         </div>
       </section>
 
-      <SaveSimulationActions
-        apiBase={apiBase}
-        selectedFile={selectedFile}
-        defaultName={
-          selectedSimulationName && selectedSimulationName !== '(unnamed)'
-            ? selectedSimulationName.replace(/_/g, ' ')
-            : ''
-        }
-      />
-
       {error ? (
         <p className="continue-section__error" role="alert">
           {error}
@@ -733,6 +734,12 @@ export function V2gResultsPage() {
           ) : null}
         </>
       ) : null}
+
+      <SaveSimulationActions
+        apiBase={apiBase}
+        selectedFile={selectedFile}
+        saveLabel={saveLabel}
+      />
     </div>
   )
 }

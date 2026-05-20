@@ -1023,6 +1023,14 @@ a.brand {
   margin-top: 8px;
 }
 
+.results-page__export {
+  margin-top: 8px;
+}
+
+.results-page__export .page-actions {
+  margin-top: 0;
+}
+
 .btn--continue {
   min-width: 200px;
   padding: 11px 28px;

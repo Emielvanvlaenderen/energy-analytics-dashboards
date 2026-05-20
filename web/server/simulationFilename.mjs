@@ -35,6 +35,25 @@ export function formatParametersLabel(parametersLabel) {
   return parametersLabel.split('__').join(' · ')
 }
 
+/** Account save label: simulation name + run parameters (max 64 chars). */
+export function buildSavedSimulationName(
+  simulationName,
+  parametersDisplay,
+  parametersLabel,
+) {
+  const params = (parametersDisplay || parametersLabel || '').trim()
+  let name =
+    simulationName && simulationName !== '(unnamed)'
+      ? String(simulationName).replace(/_/g, ' ')
+      : null
+  if (simulationName === 'Pre-run_demo') name = 'Pre-run (demo)'
+  let label = ''
+  if (name && params) label = `${name} — ${params}`
+  else if (name) label = name
+  else label = params || 'Saved run'
+  return label.length > 64 ? label.slice(0, 64) : label
+}
+
 export function groupSimulationsByName(simulations) {
   const map = new Map()
   for (const sim of simulations) {

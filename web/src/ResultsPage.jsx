@@ -4,6 +4,7 @@ import ReactEcharts from 'echarts-for-react'
 
 import { BRAND, BRAND_ACCENT } from './brand'
 import {
+  buildSavedSimulationName,
   findSimulationMeta,
   formatRunOptionLabel,
   formatSimulationGroupOption,
@@ -813,6 +814,16 @@ export function ResultsPage() {
     return g?.runs ?? []
   }, [groups, selectedSimulationName])
 
+  const saveLabel = useMemo(() => {
+    const meta = selectedFile ? findSimulationMeta(simulations, selectedFile) : null
+    if (!meta) return ''
+    return buildSavedSimulationName(
+      meta.simulationName,
+      meta.parametersDisplay,
+      meta.parametersLabel,
+    )
+  }, [simulations, selectedFile])
+
   function handleSimulationNameChange(name) {
     setSelectedSimulationName(name)
     const g = groups.find((x) => x.simulationName === name)
@@ -873,16 +884,6 @@ export function ResultsPage() {
           </label>
         </div>
       </section>
-
-      <SaveSimulationActions
-        apiBase={apiBase}
-        selectedFile={selectedFile}
-        defaultName={
-          selectedSimulationName && selectedSimulationName !== '(unnamed)'
-            ? selectedSimulationName.replace(/_/g, ' ')
-            : ''
-        }
-      />
 
       {error ? (
         <p className="continue-section__error" role="alert">
@@ -1015,6 +1016,12 @@ export function ResultsPage() {
           ) : null}
         </>
       ) : null}
+
+      <SaveSimulationActions
+        apiBase={apiBase}
+        selectedFile={selectedFile}
+        saveLabel={saveLabel}
+      />
     </div>
   )
 }
