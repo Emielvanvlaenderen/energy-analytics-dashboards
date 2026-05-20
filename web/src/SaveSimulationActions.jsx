@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from './AuthContext'
 import {
+  apiFetch,
   formatApiError,
   jsonBodyWithGuest,
   parseApiResponse,
@@ -82,6 +83,15 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
       const token = await resolveAccessToken()
       if (!token) {
         setMessage('Session expired. Sign out, then sign in with GitHub again.')
+        return
+      }
+
+      const meRes = await apiFetch('/api/me', { authToken: token })
+      const { data: meData } = await parseApiResponse(meRes)
+      if (!meRes.ok || !meData?.user?.id) {
+        setMessage(
+          'API could not verify your GitHub session. Confirm Netlify VITE_SUPABASE_URL matches Render SUPABASE_URL, then sign out and in again.',
+        )
         return
       }
 

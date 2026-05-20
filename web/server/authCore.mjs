@@ -2,9 +2,14 @@ import { createClient } from '@supabase/supabase-js'
 
 let adminClient = null
 
+function env(name) {
+  const v = process.env[name]
+  return typeof v === 'string' ? v.trim() : ''
+}
+
 export function getSupabaseAdmin() {
-  const url = process.env.SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const url = env('SUPABASE_URL')
+  const key = env('SUPABASE_SERVICE_ROLE_KEY')
   if (!url || !key) return null
   if (!adminClient) {
     adminClient = createClient(url, key, {
@@ -16,35 +21,62 @@ export function getSupabaseAdmin() {
 
 export function isSupabaseConfigured() {
   return Boolean(
-    process.env.SUPABASE_URL &&
-      process.env.SUPABASE_SERVICE_ROLE_KEY &&
-      process.env.SUPABASE_ANON_KEY,
+    env('SUPABASE_URL') &&
+      env('SUPABASE_SERVICE_ROLE_KEY') &&
+      env('SUPABASE_ANON_KEY'),
   )
 }
 
-function createAuthVerifierClient() {
-  const url = process.env.SUPABASE_URL
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
-  if (!url || !key) return null
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
+function supabaseAuthBaseUrl() {
+  return env('SUPABASE_URL').replace(/\/$/, '')
 }
 
-/** @returns {Promise<{ id: string, email?: string, user_metadata?: object } | null>} */
+function supabaseApiKey() {
+  return env('SUPABASE_SERVICE_ROLE_KEY') || env('SUPABASE_ANON_KEY')
+}
+
+/**
+ * Validate user JWT via Supabase Auth REST API (reliable on Node/Render).
+ * @returns {Promise<{ id: string, email?: string, user_metadata?: object } | null>}
+ */
 export async function verifyBearerToken(req) {
   const header = req.headers.authorization || ''
   const match = /^Bearer\s+(.+)$/i.exec(header)
   if (!match) return null
 
-  const client = getSupabaseAdmin() || createAuthVerifierClient()
-  if (!client) return null
+  const url = supabaseAuthBaseUrl()
+  const apikey = supabaseApiKey()
+  if (!url || !apikey) {
+    console.warn('[auth] Missing SUPABASE_URL or API key on server')
+    return null
+  }
 
   const token = match[1].trim()
-  const { data, error } = await client.auth.getUser(token)
-  if (error || !data?.user) return null
-  return data.user
+
+  try {
+    const res = await fetch(`${url}/auth/v1/user`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey,
+      },
+    })
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      console.warn(
+        `[auth] /auth/v1/user ${res.status}`,
+        body.slice(0, 240) || res.statusText,
+      )
+      return null
+    }
+
+    const user = await res.json()
+    if (!user?.id) return null
+    return user
+  } catch (e) {
+    console.warn('[auth] verify error', e instanceof Error ? e.message : e)
+    return null
+  }
 }
 
 export async function attachAuth(req, res, next) {

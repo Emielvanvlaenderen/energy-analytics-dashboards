@@ -63,22 +63,47 @@ export function parseYieldCsvFile(filePath) {
  * Power (MW) = (yield_pct / 100) × installed_mw for each interval.
  * Timestamps follow the yield file (GMT); local column is Europe/London.
  */
-/** Forward-fill yield through last completed half-hour (matches consumption series end). */
+function yieldSlotKey(dt) {
+  return `${String(dt.month).padStart(2, '0')}-${String(dt.day).padStart(2, '0')}-${String(dt.hour).padStart(2, '0')}-${String(dt.minute).padStart(2, '0')}`
+}
+
+/** Latest year's yield per calendar half-hour slot (month-day-hour-minute). */
+function buildSeasonalYieldLookup(yieldRows) {
+  const map = new Map()
+  for (const row of yieldRows) {
+    const dt = DateTime.fromISO(row.datetime_gmt, { zone: 'utc' })
+    if (!dt.isValid) continue
+    const key = yieldSlotKey(dt)
+    const prev = map.get(key)
+    if (!prev || dt.year >= prev.year) {
+      map.set(key, { yieldPct: row.yieldPct, year: dt.year })
+    }
+  }
+  return map
+}
+
+/**
+ * Extend yield through last completed half-hour using seasonal pattern
+ * (same month/day/time from historical years), not a flat last value.
+ */
 export function extendYieldRowsToSeriesEnd(yieldRows) {
   if (!yieldRows?.length) return yieldRows
   const end = defaultSeriesEndLondon()
   if (!end) return yieldRows
 
+  const seasonal = buildSeasonalYieldLookup(yieldRows)
   const last = yieldRows[yieldRows.length - 1]
   let dt = DateTime.fromISO(last.datetime_gmt, { zone: 'utc' })
   if (!dt.isValid) return yieldRows
 
+  const fallbackPct = last.yieldPct
   const out = [...yieldRows]
   dt = dt.plus({ minutes: 30 })
   while (dt <= end) {
+    const entry = seasonal.get(yieldSlotKey(dt))
     out.push({
       datetime_gmt: dt.toFormat("yyyy-MM-dd'T'HH:mm:ss'Z'"),
-      yieldPct: last.yieldPct,
+      yieldPct: entry?.yieldPct ?? fallbackPct,
     })
     dt = dt.plus({ minutes: 30 })
   }
