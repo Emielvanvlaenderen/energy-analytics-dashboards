@@ -29,9 +29,17 @@ export async function parseApiResponse(res) {
 }
 
 export function formatApiError(res, data, fallback) {
+  if (data?.error === 'usage_exceeded' || data?.message === 'Usage exceeded') {
+    return (
+      'Render free tier usage limit reached. Open the Render dashboard → your service ' +
+      '(resume or upgrade to Starter), or use the app locally with npm run dev. ' +
+      'Limits reset monthly.'
+    )
+  }
   if (typeof data?.error === 'string' && data.error) return data.error
+  if (typeof data?.message === 'string' && data.message) return data.message
   if (res.status === 502 || res.status === 503) {
-    return 'API server is waking up (Render free tier). Wait 30–60 seconds and try again.'
+    return 'API server is waking up or unavailable (Render free tier). Wait 30–60 seconds, or check Render dashboard.'
   }
   if (res.status === 504) {
     return 'API request timed out. Try again in a moment.'
