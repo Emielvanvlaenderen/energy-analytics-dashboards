@@ -9,10 +9,12 @@
     "dev:server": "node server/index.mjs",
     "test:continue": "node server/test-continue.mjs",
     "build": "vite build",
+    "start": "NODE_ENV=production node server/index.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.106.0",
     "concurrently": "^9.2.1",
     "cors": "^2.8.6",
     "echarts": "^6.0.0",

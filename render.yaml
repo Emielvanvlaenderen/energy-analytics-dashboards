@@ -1,0 +1,30 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: energy-analytics-api
+    runtime: node
+    rootDir: web
+    buildCommand: npm ci && npm run build && pip3 install -r ../projects/ci-bess-uk/optimisation/requirements.txt -r ../projects/v2g-uk/optimisation/requirements.txt
+    startCommand: node server/index.mjs
+    plan: starter
+    disk:
+      name: energy-data
+      mountPath: /var/data
+      sizeGB: 10
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_ROOT
+        value: /var/data
+      - key: PORT
+        value: 3001
+      - key: PYTHON
+        value: python3
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false

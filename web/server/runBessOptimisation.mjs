@@ -10,8 +10,8 @@ import { isProjectAvailable } from './projectsRegistry.mjs'
 /**
  * Runs `projects/{id}/optimisation/run_optimisation_from_study.py`.
  */
-export function executeRunBessOptimisation(projectId) {
-  const paths = resolveProjectPaths(projectId)
+export function executeRunBessOptimisation(projectId, { paths: pathsIn } = {}) {
+  const paths = pathsIn ?? resolveProjectPaths(projectId)
   if (!paths) return Promise.resolve(projectNotFound(projectId))
   if (!isProjectAvailable(projectId)) {
     return Promise.resolve(projectNotAvailable(projectId))

@@ -6,6 +6,18 @@ import {
   parseSimulationFilename,
 } from './simulationFilename.mjs'
 import {
+  buildParametersDisplay,
+  formatSiteDataTagShort,
+  parseSiteDataTagsFromParametersLabel,
+  readSiteDataForm,
+  resolveSiteDataFlags,
+} from './siteDataLabels.mjs'
+import {
+  listAllResultCsvEntries,
+  PRE_RUN_SIMULATION_NAME,
+  resolveResultsCsvPath,
+} from './preRunResults.mjs'
+import {
   isPathInsideRoot,
   projectNotFound,
   resolveProjectPaths,
@@ -48,34 +60,13 @@ function aggregateAddedByMonth(tMs, wholesaleAdded, importAdded, exportAdded) {
 /**
  * Lists `*.csv` files in `results/`, newest first.
  */
-export function executeListBessSimulations(projectId) {
-  const paths = resolveProjectPaths(projectId)
+export function executeListBessSimulations(projectId, { paths: pathsIn } = {}) {
+  const paths = pathsIn ?? resolveProjectPaths(projectId)
   if (!paths) return projectNotFound(projectId)
 
-  const resultsDir = paths.resultsDir
-
   try {
-    if (!fs.existsSync(resultsDir)) {
-      return {
-        ok: true,
-        status: 200,
-        simulations: [],
-        groups: [],
-        activeFile: null,
-      }
-    }
-    const names = fs.readdirSync(resultsDir).filter((f) => f.endsWith('.csv'))
-    const stats = names.map((filename) => {
-      const full = path.join(resultsDir, filename)
-      let mtimeMs = 0
-      try {
-        mtimeMs = fs.statSync(full).mtimeMs
-      } catch {
-        /* ignore */
-      }
-      return { filename, mtimeMs }
-    })
-    stats.sort((a, b) => b.mtimeMs - a.mtimeMs)
+    const stats = listAllResultCsvEntries(paths)
+    const filenames = stats.map((s) => s.filename)
 
     let activeFile = null
     try {
@@ -83,31 +74,59 @@ export function executeListBessSimulations(projectId) {
         const raw = fs.readFileSync(paths.lastOutputMarker, 'utf8').trim()
         if (raw) {
           const base = path.basename(path.resolve(raw))
-          if (names.includes(base)) activeFile = base
+          if (filenames.includes(base)) activeFile = base
         }
       }
     } catch {
       /* ignore */
     }
+    if (!activeFile && stats.length) {
+      activeFile = stats.find((s) => s.isPreRun)?.filename ?? stats[0].filename
+    }
 
-    const simulations = stats.map(({ filename, mtimeMs }) => {
-      const { simulationName, parametersLabel, isLegacy } =
-        parseSimulationFilename(filename)
+    const siteForm = readSiteDataForm(paths)
+
+    const simulations = stats.map(({ filename, mtimeMs, isPreRun }) => {
+      const parsed = parseSimulationFilename(filename)
+      const { parametersLabel, isLegacy } = parsed
+      const simulationName = isPreRun
+        ? PRE_RUN_SIMULATION_NAME
+        : parsed.simulationName
+      const siteDataFlags = isPreRun
+        ? parseSiteDataTagsFromParametersLabel(parametersLabel)
+        : resolveSiteDataFlags(parametersLabel, siteForm)
       return {
         filename,
         mtimeMs,
         simulationName,
         parametersLabel,
-        parametersDisplay: formatParametersLabel(parametersLabel),
+        parametersDisplay: buildParametersDisplay(
+          parametersLabel,
+          siteDataFlags,
+          formatParametersLabel,
+        ),
+        siteDataLabel: formatSiteDataTagShort(siteDataFlags),
+        siteDataFlags,
         isLegacy,
+        isPreRun: Boolean(isPreRun),
       }
+    })
+
+    const groups = groupSimulationsByName(simulations)
+    groups.sort((a, b) => {
+      const aPre = a.runs.some((r) => r.isPreRun)
+      const bPre = b.runs.some((r) => r.isPreRun)
+      if (aPre !== bPre) return aPre ? -1 : 1
+      if (a.simulationName === '(unnamed)') return 1
+      if (b.simulationName === '(unnamed)') return -1
+      return a.simulationName.localeCompare(b.simulationName)
     })
 
     return {
       ok: true,
       status: 200,
       simulations,
-      groups: groupSimulationsByName(simulations),
+      groups,
       activeFile,
     }
   } catch (e) {
@@ -120,65 +139,14 @@ export function executeListBessSimulations(projectId) {
   }
 }
 
-function listSimulationPathsNewestFirst(resultsDir) {
-  if (!fs.existsSync(resultsDir)) return []
-  const names = fs.readdirSync(resultsDir).filter((f) => f.endsWith('.csv'))
-  const withStat = names.map((filename) => {
-    const full = path.join(resultsDir, filename)
-    let mtimeMs = 0
-    try {
-      mtimeMs = fs.statSync(full).mtimeMs
-    } catch {
-      /* ignore */
-    }
-    return { path: full, filename, mtimeMs }
-  })
-  withStat.sort((a, b) => b.mtimeMs - a.mtimeMs)
-  return withStat
-}
-
-function resolveResultsCsvPath(paths, fileQuery) {
-  const { resultsDir, lastOutputMarker, root } = paths
-
-  if (fileQuery && typeof fileQuery === 'string' && fileQuery.trim()) {
-    const safe = path.basename(fileQuery.trim())
-    if (safe !== fileQuery.trim() || safe.includes('..')) {
-      return { error: 'Invalid file.', status: 400 }
-    }
-    const csvPath = path.join(resultsDir, safe)
-    if (!isPathInsideRoot(root, csvPath) || !fs.existsSync(csvPath)) {
-      return { error: 'Results file not found.', status: 404 }
-    }
-    return { csvPath }
-  }
-
-  if (fs.existsSync(lastOutputMarker)) {
-    const rawPath = fs.readFileSync(lastOutputMarker, 'utf8').trim()
-    if (rawPath) {
-      const csvPath = path.resolve(rawPath)
-      if (isPathInsideRoot(root, csvPath) && fs.existsSync(csvPath)) {
-        return { csvPath }
-      }
-    }
-  }
-
-  const fallback = listSimulationPathsNewestFirst(resultsDir)
-  if (fallback.length) {
-    return { csvPath: fallback[0].path }
-  }
-
-  return {
-    error: 'No optimisation results yet. Run Simulate BESS or add CSV files to results/.',
-    status: 404,
-  }
-}
+export { resolveResultsCsvPath }
 
 /**
  * Reads a BESS results CSV and returns compact arrays for charting.
  * @param {{ file?: string }} [query] — optional `file` = basename under `results/`
  */
-export function executeGetBessResults(projectId, query = {}) {
-  const paths = resolveProjectPaths(projectId)
+export function executeGetBessResults(projectId, query = {}, { paths: pathsIn } = {}) {
+  const paths = pathsIn ?? resolveProjectPaths(projectId)
   if (!paths) return projectNotFound(projectId)
 
   try {
@@ -325,5 +293,22 @@ export function executeGetBessResults(projectId, query = {}) {
       status: 500,
       error: e instanceof Error ? e.message : 'Failed to read results.',
     }
+  }
+}
+
+/** Resolve latest (or named) results CSV for guest download — no auth required. */
+export function executeDownloadResults(projectId, query = {}, { paths: pathsIn } = {}) {
+  const paths = pathsIn ?? resolveProjectPaths(projectId)
+  if (!paths) return projectNotFound(projectId)
+
+  const resolved = resolveResultsCsvPath(paths, query.file)
+  if (resolved.error) {
+    return { ok: false, status: resolved.status, error: resolved.error }
+  }
+  return {
+    ok: true,
+    status: 200,
+    csvPath: resolved.csvPath,
+    filename: path.basename(resolved.csvPath),
   }
 }

@@ -1,33 +1,19 @@
 import fs from 'fs'
 import path from 'path'
-import { PROJECTS_DIR } from './repoRoot.mjs'
+import {
+  getDataRoot,
+  resolveProjectPaths as resolveWorkspacePaths,
+} from './workspaceCore.mjs'
 import { getProjectById } from './projectsRegistry.mjs'
 
+export { getDataRoot }
+
 /**
- * Resolved filesystem paths for one analytics project.
  * @param {string} projectId
+ * @param {string} [workspaceId] e.g. guest:uuid
  */
-export function resolveProjectPaths(projectId) {
-  const meta = getProjectById(projectId)
-  if (!meta) return null
-
-  const root = path.join(PROJECTS_DIR, projectId)
-  const optimisationDir = path.join(root, 'optimisation')
-  const dataDir = path.join(root, 'data')
-  const resultsDir = path.join(root, 'results')
-
-  return {
-    projectId,
-    meta,
-    root,
-    dataDir,
-    resultsDir,
-    optimisationDir,
-    studyInputsPath: path.join(optimisationDir, 'study_inputs.json'),
-    lastOutputMarker: path.join(optimisationDir, '.last_optimisation_output.txt'),
-    runScript: path.join(optimisationDir, 'run_optimisation_from_study.py'),
-    projectKind: meta.id === 'v2g-uk' ? 'v2g' : 'bess',
-  }
+export function resolveProjectPaths(projectId, workspaceId = 'guest:local') {
+  return resolveWorkspacePaths(projectId, workspaceId)
 }
 
 export function projectNotFound(projectId) {
@@ -46,7 +32,7 @@ export function projectNotAvailable(projectId) {
   }
 }
 
-/** Ensures `data/`, `results/`, and `optimisation/` exist for a project. */
+/** Ensures `data/`, `results/`, and `optimisation/` exist for a project workspace. */
 export function ensureProjectDirs(paths) {
   for (const dir of [paths.dataDir, paths.resultsDir, paths.optimisationDir]) {
     fs.mkdirSync(dir, { recursive: true })

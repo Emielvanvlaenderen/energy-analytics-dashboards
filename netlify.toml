@@ -1,0 +1,15 @@
+[build]
+  base = "web"
+  command = "npm ci && npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Optional: proxy /api to Render so the browser stays same-origin (leave VITE_API_BASE_URL empty).
+# Replace the host with your Render service URL before enabling:
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://YOUR-SERVICE.onrender.com/api/:splat"
+#   status = 200
+#   force = true

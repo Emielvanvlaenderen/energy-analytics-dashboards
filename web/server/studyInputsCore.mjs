@@ -67,8 +67,8 @@ function validateSiteLimitsMw(limits) {
   return null
 }
 
-export function executeGetStudyInputs(projectId) {
-  const paths = resolveProjectPaths(projectId)
+export function executeGetStudyInputs(projectId, { paths: pathsIn } = {}) {
+  const paths = pathsIn ?? resolveProjectPaths(projectId)
   if (!paths) return projectNotFound(projectId)
 
   try {
@@ -84,8 +84,8 @@ export function executeGetStudyInputs(projectId) {
   }
 }
 
-export function executeSaveStudyInputs(projectId, body) {
-  const paths = resolveProjectPaths(projectId)
+export function executeSaveStudyInputs(projectId, body, { paths: pathsIn } = {}) {
+  const paths = pathsIn ?? resolveProjectPaths(projectId)
   if (!paths) return projectNotFound(projectId)
 
   if (!body || typeof body !== 'object') {
@@ -192,12 +192,20 @@ export function executeSaveStudyInputs(projectId, body) {
   }
 }
 
-export function saveGridTariffsToStudyInputs(projectId, { importNonEnergy, duos, bandMatrix }) {
-  return executeSaveStudyInputs(projectId, {
+export function saveGridTariffsToStudyInputs(
+  projectId,
+  { importNonEnergy, duos, bandMatrix },
+  options = {},
+) {
+  return executeSaveStudyInputs(
+    projectId,
+    {
     gridTariffs: {
       importNonEnergy: importNonEnergy ?? '',
       duos,
       bandMatrix,
     },
-  })
+    },
+    options,
+  )
 }

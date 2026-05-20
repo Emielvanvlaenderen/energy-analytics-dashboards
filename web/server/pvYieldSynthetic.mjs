@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { DateTime } from 'luxon'
 import { rowsToPowerCsv } from './generateConstantMwSeries.mjs'
+import { PROJECTS_DIR } from './repoRoot.mjs'
 
 export const PV_SYNTHETIC_FILENAME = 'site_pv_generation_synthetic_mw.csv'
 
@@ -11,10 +12,20 @@ export const PV_YIELD_FILE_CANDIDATES = [
   'PV_Live Historical Results.csv',
 ]
 
-export function findYieldCsvPath(dataDir) {
-  for (const name of PV_YIELD_FILE_CANDIDATES) {
-    const p = path.join(dataDir, name)
-    if (fs.existsSync(p)) return p
+/** National GB yield bundled with C&I BESS; shared by all UK simulators. */
+export const SHARED_PV_YIELD_DATA_DIR = path.join(
+  PROJECTS_DIR,
+  'ci-bess-uk',
+  'data',
+)
+
+/** First existing candidate file in any of the given data directories. */
+export function findYieldCsvPath(...searchDirs) {
+  for (const dataDir of searchDirs.filter(Boolean)) {
+    for (const name of PV_YIELD_FILE_CANDIDATES) {
+      const p = path.join(dataDir, name)
+      if (fs.existsSync(p)) return p
+    }
   }
   return null
 }
@@ -66,8 +77,8 @@ export function powerRowsFromYield(yieldRows, installedMw) {
   })
 }
 
-export function writePvSyntheticFromYield(dataDir, installedMw) {
-  const src = findYieldCsvPath(dataDir)
+export function writePvSyntheticFromYield(dataDir, installedMw, extraSearchDirs = []) {
+  const src = findYieldCsvPath(dataDir, ...extraSearchDirs, SHARED_PV_YIELD_DATA_DIR)
   if (!src) {
     return {
       ok: false,

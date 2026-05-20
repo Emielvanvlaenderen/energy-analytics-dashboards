@@ -1,23 +1,28 @@
-import cors from 'cors'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import express from 'express'
-import { createProjectApiRouter } from './projectApiRouter.mjs'
-import { PROJECTS } from './projectsRegistry.mjs'
+import { applyApiCors, createApiApp } from './createApiApp.mjs'
+
+// createApiApp returns a sub-app; mount after CORS so preflight and credentials work cross-origin.
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const distDir = path.join(__dirname, '..', 'dist')
 
 const app = express()
-app.use(cors())
-app.use(express.json({ limit: '4mb' }))
+applyApiCors(app)
+app.use(createApiApp())
 
-app.get('/api/projects', (req, res) => {
-  return res.json({ ok: true, projects: PROJECTS })
-})
-
-app.use('/api/projects/:projectId', createProjectApiRouter())
+if (process.env.SERVE_STATIC !== 'false') {
+  app.use(express.static(distDir, { index: false }))
+  app.get(/^(?!\/api).*/, (req, res) => {
+    res.sendFile(path.join(distDir, 'index.html'))
+  })
+}
 
 const PORT = Number(process.env.PORT) || 3001
 const server = app.listen(PORT, () => {
-  console.log(`API server http://localhost:${PORT}`)
-  console.log(`Projects API: /api/projects/:projectId/...`)
-  console.log(`Registered: ${PROJECTS.map((p) => p.id).join(', ')}`)
+  console.log(`API + app http://localhost:${PORT}`)
+  console.log(`DATA_ROOT=${process.env.DATA_ROOT || '(default .data)'}`)
 })
 server.timeout = 3_600_000
 server.headersTimeout = 3_700_000

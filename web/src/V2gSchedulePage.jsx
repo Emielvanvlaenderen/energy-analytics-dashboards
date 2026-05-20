@@ -4,6 +4,7 @@ import { AlertModal } from './AlertModal'
 import { V2gScheduleMatrix } from './V2gScheduleMatrix'
 import { BRAND } from './brand'
 import { useStudyInputs } from './StudyInputsContext'
+import { projectFetch } from './lib/api'
 import { useProjectApi } from './useProjectApi'
 import { useSolutionPaths } from './useSolutionPaths'
 import {
@@ -33,7 +34,7 @@ export function V2gSchedulePage() {
     setError(null)
     setSaving(true)
     try {
-      const saveRes = await fetch(`${apiBase}/study-inputs`, {
+      const saveRes = await projectFetch(`${apiBase}/study-inputs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ v2gSchedule }),

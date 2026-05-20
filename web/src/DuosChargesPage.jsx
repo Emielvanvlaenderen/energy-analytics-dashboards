@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { projectFetch } from './lib/api'
 import { useProjectApi } from './useProjectApi'
 import { useSolutionPaths } from './useSolutionPaths'
 import { AlertModal } from './AlertModal'
@@ -81,7 +82,7 @@ export function DuosChargesPage() {
 
     setContinueLoading(true)
     try {
-      const res = await fetch(`${apiBase}/continue`, {
+      const res = await projectFetch(`${apiBase}/continue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

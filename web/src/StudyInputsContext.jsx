@@ -5,6 +5,7 @@ import {
   useMemo,
   useState,
 } from 'react'
+import { projectFetch } from './lib/api'
 import { useProjectApi } from './useProjectApi'
 import { emptyMatrix } from './BandMatrix'
 import { defaultV2gSchedule, normalizeV2gSchedule } from './v2gSchedule'
@@ -103,7 +104,7 @@ export function StudyInputsProvider({ children }) {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch(`${apiBase}/study-inputs`)
+        const res = await projectFetch(`${apiBase}/study-inputs`)
         const data = await res.json().catch(() => ({}))
         if (cancelled || !res.ok || !data.ok || !data.study) return
         const s = data.study

@@ -24,8 +24,8 @@ export function validateConsumptionConstantPayload(body) {
   return null
 }
 
-export function executeConsumptionConstant(projectId, body) {
-  const paths = resolveProjectPaths(projectId)
+export function executeConsumptionConstant(projectId, body, { paths: pathsIn } = {}) {
+  const paths = pathsIn ?? resolveProjectPaths(projectId)
   if (!paths) return projectNotFound(projectId)
   if (!isProjectAvailable(projectId)) return projectNotAvailable(projectId)
 
@@ -73,8 +73,8 @@ export function validateInstalledMwPayload(body) {
   return null
 }
 
-export function executePvSyntheticFromYield(projectId, body) {
-  const paths = resolveProjectPaths(projectId)
+export function executePvSyntheticFromYield(projectId, body, { paths: pathsIn } = {}) {
+  const paths = pathsIn ?? resolveProjectPaths(projectId)
   if (!paths) return projectNotFound(projectId)
   if (!isProjectAvailable(projectId)) return projectNotAvailable(projectId)
 
@@ -85,7 +85,9 @@ export function executePvSyntheticFromYield(projectId, body) {
 
   try {
     const installedMw = Number.parseFloat(String(body.installedMw))
-    return writePvSyntheticFromYield(paths.dataDir, installedMw)
+    return writePvSyntheticFromYield(paths.dataDir, installedMw, [
+      path.join(paths.templateRoot, 'data'),
+    ])
   } catch (e) {
     console.error(e)
     return {

@@ -7,8 +7,8 @@ import {
 } from './projectPaths.mjs'
 import { isProjectAvailable } from './projectsRegistry.mjs'
 
-export function executeRunV2gOptimisation(projectId) {
-  const paths = resolveProjectPaths(projectId)
+export function executeRunV2gOptimisation(projectId, { paths: pathsIn } = {}) {
+  const paths = pathsIn ?? resolveProjectPaths(projectId)
   if (!paths) return Promise.resolve(projectNotFound(projectId))
   if (!isProjectAvailable(projectId)) {
     return Promise.resolve(projectNotAvailable(projectId))

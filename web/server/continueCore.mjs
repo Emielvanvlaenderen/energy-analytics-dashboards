@@ -50,8 +50,8 @@ export function validatePayload(body) {
  * Import charge per interval = Import DUoS (band) + non-energy (flat add-on).
  * Export charge per interval = Export DUoS (band) only.
  */
-export function executeContinue(projectId, body) {
-  const paths = resolveProjectPaths(projectId)
+export function executeContinue(projectId, body, { paths: pathsIn } = {}) {
+  const paths = pathsIn ?? resolveProjectPaths(projectId)
   if (!paths) return projectNotFound(projectId)
   if (!isProjectAvailable(projectId)) return projectNotAvailable(projectId)
 
@@ -82,11 +82,15 @@ export function executeContinue(projectId, body) {
     fs.writeFileSync(importPath, rowsToImportCsv(rows), 'utf8')
     fs.writeFileSync(exportPath, rowsToExportCsv(rows), 'utf8')
 
-    const saved = saveGridTariffsToStudyInputs(projectId, {
-      importNonEnergy,
-      duos,
-      bandMatrix,
-    })
+    const saved = saveGridTariffsToStudyInputs(
+      projectId,
+      {
+        importNonEnergy,
+        duos,
+        bandMatrix,
+      },
+      { paths },
+    )
     if (!saved.ok) {
       return {
         ok: false,

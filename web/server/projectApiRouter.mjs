@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import fs from 'fs'
 import { executeContinue } from './continueCore.mjs'
 import {
   executeConsumptionConstant,
@@ -7,6 +8,7 @@ import {
 import {
   executeGetBessResults,
   executeListBessSimulations,
+  executeDownloadResults,
 } from './bessResultsCore.mjs'
 import {
   executeGetStudyInputs,
@@ -15,8 +17,15 @@ import {
 import { executeRunBessOptimisation } from './runBessOptimisation.mjs'
 import { executeRunV2gOptimisation } from './runV2gOptimisation.mjs'
 import { executeGetV2gResults } from './v2gResultsCore.mjs'
-import { projectNotFound, resolveProjectPaths } from './projectPaths.mjs'
+import { projectNotFound } from './projectPaths.mjs'
 import { getProjectById } from './projectsRegistry.mjs'
+import { isSupabaseConfigured } from './authCore.mjs'
+import {
+  executeDeleteSavedSimulation,
+  executeDownloadSavedSimulation,
+  executeListSavedSimulations,
+  executeSaveCurrentSimulation,
+} from './savedSimulationsCore.mjs'
 
 function requireProject(req, res, next) {
   const projectId = req.params.projectId
@@ -28,6 +37,24 @@ function requireProject(req, res, next) {
   next()
 }
 
+function requireAuth(req, res, next) {
+  if (!req.authUser) {
+    return res.status(401).json({
+      ok: false,
+      error: 'Sign in with GitHub to save simulations to your account.',
+    })
+  }
+  if (!isSupabaseConfigured()) {
+    return res.status(503).json({
+      ok: false,
+      error: 'Account storage is not configured on this server.',
+    })
+  }
+  next()
+}
+
+const ws = (req) => ({ paths: req.paths })
+
 /** Project-scoped API under `/api/projects/:projectId`. */
 export function createProjectApiRouter() {
   const router = Router({ mergeParams: true })
@@ -35,7 +62,7 @@ export function createProjectApiRouter() {
   router.use(requireProject)
 
   router.get('/study-inputs', (req, res) => {
-    const result = executeGetStudyInputs(req.projectId)
+    const result = executeGetStudyInputs(req.projectId, ws(req))
     if (!result.ok) {
       return res.status(result.status).json({ ok: false, error: result.error })
     }
@@ -43,7 +70,7 @@ export function createProjectApiRouter() {
   })
 
   router.post('/study-inputs', (req, res) => {
-    const result = executeSaveStudyInputs(req.projectId, req.body)
+    const result = executeSaveStudyInputs(req.projectId, req.body, ws(req))
     if (!result.ok) {
       return res.status(result.status).json({ ok: false, error: result.error })
     }
@@ -51,7 +78,7 @@ export function createProjectApiRouter() {
   })
 
   router.get('/bess-simulations', (req, res) => {
-    const result = executeListBessSimulations(req.projectId)
+    const result = executeListBessSimulations(req.projectId, ws(req))
     if (!result.ok) {
       return res.status(result.status).json({ ok: false, error: result.error })
     }
@@ -66,11 +93,10 @@ export function createProjectApiRouter() {
   router.get('/bess-results', (req, res) => {
     const file =
       typeof req.query.file === 'string' ? req.query.file : undefined
-    const paths = resolveProjectPaths(req.projectId)
     const result =
-      paths?.projectKind === 'v2g'
-        ? executeGetV2gResults(req.projectId, { file })
-        : executeGetBessResults(req.projectId, { file })
+      req.paths?.projectKind === 'v2g'
+        ? executeGetV2gResults(req.projectId, { file }, ws(req))
+        : executeGetBessResults(req.projectId, { file }, ws(req))
     if (!result.ok) {
       return res.status(result.status).json({ ok: false, error: result.error })
     }
@@ -83,8 +109,80 @@ export function createProjectApiRouter() {
     })
   })
 
+  /** Guest download of latest (or selected) results CSV — no auth. */
+  router.get('/bess-results/download', (req, res) => {
+    const file =
+      typeof req.query.file === 'string' ? req.query.file : undefined
+    const result = executeDownloadResults(req.projectId, { file }, ws(req))
+    if (!result.ok) {
+      return res.status(result.status).json({ ok: false, error: result.error })
+    }
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${result.filename}"`,
+    )
+    fs.createReadStream(result.csvPath).pipe(res)
+  })
+
+  router.get('/saved-simulations', requireAuth, async (req, res) => {
+    const result = await executeListSavedSimulations(
+      req.projectId,
+      req.authUser.id,
+    )
+    if (!result.ok) {
+      return res.status(result.status).json({ ok: false, error: result.error })
+    }
+    return res.json({ ok: true, simulations: result.simulations })
+  })
+
+  router.post('/saved-simulations', requireAuth, async (req, res) => {
+    const result = await executeSaveCurrentSimulation(
+      req.projectId,
+      req.authUser.id,
+      req.body,
+      ws(req),
+    )
+    if (!result.ok) {
+      return res.status(result.status).json({ ok: false, error: result.error })
+    }
+    return res.status(result.status).json({
+      ok: true,
+      simulation: result.simulation,
+    })
+  })
+
+  router.get('/saved-simulations/:id/download', requireAuth, async (req, res) => {
+    const result = await executeDownloadSavedSimulation(
+      req.projectId,
+      req.authUser.id,
+      req.params.id,
+    )
+    if (!result.ok) {
+      return res.status(result.status).json({ ok: false, error: result.error })
+    }
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${result.filename}"`,
+    )
+    return res.send(result.buffer)
+  })
+
+  router.delete('/saved-simulations/:id', requireAuth, async (req, res) => {
+    const result = await executeDeleteSavedSimulation(
+      req.projectId,
+      req.authUser.id,
+      req.params.id,
+    )
+    if (!result.ok) {
+      return res.status(result.status).json({ ok: false, error: result.error })
+    }
+    return res.json({ ok: true })
+  })
+
   router.post('/continue', (req, res) => {
-    const result = executeContinue(req.projectId, req.body)
+    const result = executeContinue(req.projectId, req.body, ws(req))
     if (!result.ok) {
       return res.status(result.status).json({ ok: false, error: result.error })
     }
@@ -92,7 +190,7 @@ export function createProjectApiRouter() {
   })
 
   router.post('/site-data/consumption-constant', (req, res) => {
-    const result = executeConsumptionConstant(req.projectId, req.body)
+    const result = executeConsumptionConstant(req.projectId, req.body, ws(req))
     if (!result.ok) {
       return res.status(result.status).json({ ok: false, error: result.error })
     }
@@ -100,7 +198,7 @@ export function createProjectApiRouter() {
   })
 
   router.post('/site-data/pv-synthetic-from-yield', (req, res) => {
-    const result = executePvSyntheticFromYield(req.projectId, req.body)
+    const result = executePvSyntheticFromYield(req.projectId, req.body, ws(req))
     if (!result.ok) {
       return res.status(result.status).json({ ok: false, error: result.error })
     }
@@ -110,10 +208,9 @@ export function createProjectApiRouter() {
   router.post('/run-bess-optimisation', async (req, res) => {
     req.setTimeout(0)
     res.setTimeout(0)
-    const paths = resolveProjectPaths(req.projectId)
-    const result = await (paths?.projectKind === 'v2g'
-      ? executeRunV2gOptimisation(req.projectId)
-      : executeRunBessOptimisation(req.projectId))
+    const result = await (req.paths?.projectKind === 'v2g'
+      ? executeRunV2gOptimisation(req.projectId, ws(req))
+      : executeRunBessOptimisation(req.projectId, ws(req)))
     if (!result.ok) {
       return res.status(result.status).json({
         ok: false,

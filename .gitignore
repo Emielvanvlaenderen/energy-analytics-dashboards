@@ -18,6 +18,9 @@ web/dist-ssr/
 .vscode/*
 !.vscode/extensions.json
 
+# Runtime workspaces (guest sessions)
+.data/
+
 # Python
 __pycache__/
 *.py[cod]

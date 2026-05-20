@@ -232,11 +232,12 @@ def _format_results_for_csv(df: pd.DataFrame) -> pd.DataFrame:
 
     out["wholesale"] = out["settlement_price"] * site_wo / 2
     out["import"] = out["import_costs"] * np.minimum(0, site_wo) / 2
-    out["export"] = out["export_costs"] * np.maximum(0, site_wo) / 2
+    # Export DUoS is negative £/MWh (grid credit); revenue = (-export_costs) × export MW.
+    out["export"] = (-out["export_costs"]) * np.maximum(0, site_wo) / 2
 
     out["wholesale_bess"] = out["settlement_price"] * site_w_bess / 2
     out["import_bess"] = out["import_costs"] * np.minimum(0, site_w_bess) / 2
-    out["export_bess"] = out["export_costs"] * np.maximum(0, site_w_bess) / 2
+    out["export_bess"] = (-out["export_costs"]) * np.maximum(0, site_w_bess) / 2
 
     # Added value = (with BESS) - (without optimisation).
     out["wholesale_added"] = out["wholesale_bess"] - out["wholesale"]

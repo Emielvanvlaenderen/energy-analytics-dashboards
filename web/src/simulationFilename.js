@@ -22,3 +22,22 @@ export function groupSimulationsByName(simulations) {
 export function findSimulationMeta(simulations, filename) {
   return simulations.find((s) => s.filename === filename) ?? null
 }
+
+/** Simulation name dropdown — pre-run uses one group; PV/load shown on run picker. */
+export function formatSimulationGroupOption(group) {
+  const run = group.runs?.[0]
+  if (run?.isPreRun || group.simulationName === 'Pre-run_demo') {
+    return 'Pre-run (demo)'
+  }
+  const name =
+    group.simulationName === '(unnamed)'
+      ? 'Previous runs (no name)'
+      : group.simulationName.replace(/_/g, ' ')
+  const tag = run?.siteDataLabel
+  return tag ? `${name} — ${tag}` : name
+}
+
+/** Run picker label (server builds parametersDisplay; this is a fallback). */
+export function formatRunOptionLabel(sim) {
+  return sim.parametersDisplay ?? sim.parametersLabel ?? sim.filename
+}

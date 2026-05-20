@@ -5,9 +5,13 @@ import ReactEcharts from 'echarts-for-react'
 import { BRAND, BRAND_ACCENT } from './brand'
 import {
   findSimulationMeta,
+  formatRunOptionLabel,
+  formatSimulationGroupOption,
   groupSimulationsByName,
 } from './simulationFilename'
+import { projectFetch } from './lib/api'
 import { useProjectApi } from './useProjectApi'
+import { SaveSimulationActions } from './SaveSimulationActions'
 
 /** Same blue as site graph */
 const SITE_BLUE = '#2563eb'
@@ -628,7 +632,7 @@ export function ResultsPage() {
     let cancelled = false
     ;(async () => {
       try {
-        const simRes = await fetch(`${apiBase}/bess-simulations`)
+        const simRes = await projectFetch(`${apiBase}/bess-simulations`)
         const simData = await simRes.json().catch(() => ({}))
         if (cancelled) return
         if (!simRes.ok || !simData.ok) {
@@ -685,7 +689,7 @@ export function ResultsPage() {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(
+        const res = await projectFetch(
           `${apiBase}/bess-results?file=${encodeURIComponent(selectedFile)}`,
         )
         const data = await res.json().catch(() => ({}))
@@ -845,9 +849,7 @@ export function ResultsPage() {
             >
               {groups.map((g) => (
                 <option key={g.simulationName} value={g.simulationName}>
-                  {g.simulationName === '(unnamed)'
-                    ? 'Previous runs (no name)'
-                    : g.simulationName.replace(/_/g, ' ')}
+                  {formatSimulationGroupOption(g)}
                 </option>
               ))}
             </select>
@@ -864,15 +866,23 @@ export function ResultsPage() {
             >
               {runsForSelectedName.map((s) => (
                 <option key={s.filename} value={s.filename}>
-                  {s.parametersDisplay ??
-                    s.parametersLabel ??
-                    s.filename}
+                  {formatRunOptionLabel(s)}
                 </option>
               ))}
             </select>
           </label>
         </div>
       </section>
+
+      <SaveSimulationActions
+        apiBase={apiBase}
+        selectedFile={selectedFile}
+        defaultName={
+          selectedSimulationName && selectedSimulationName !== '(unnamed)'
+            ? selectedSimulationName.replace(/_/g, ' ')
+            : ''
+        }
+      />
 
       {error ? (
         <p className="continue-section__error" role="alert">

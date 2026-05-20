@@ -1,20 +1,24 @@
 {
-  "simulationName": "test-v2g",
   "fxGbpPerEur": 0.85,
+  "nbDaysPerPeriod": 3,
+  "siteImportExportLimitsMw": {
+    "maxImportMw": 2,
+    "maxExportMw": 2
+  },
   "gridTariffs": {
-    "importNonEnergy": "5",
+    "importNonEnergy": "70",
     "duos": {
       "green": {
-        "import": "10",
-        "export": "-3"
+        "import": "1",
+        "export": "-1"
       },
       "amber": {
-        "import": "20",
-        "export": "-30"
+        "import": "10",
+        "export": "-10"
       },
       "red": {
-        "import": "100",
-        "export": "-200"
+        "import": "60",
+        "export": "-60"
       }
     },
     "bandMatrix": [
@@ -33,28 +37,12 @@
         "green",
         "green",
         "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
+        "amber",
+        "amber",
+        "amber",
+        "amber",
+        "amber",
+        "amber",
         "amber",
         "amber",
         "amber",
@@ -75,30 +63,10 @@
         "red",
         "red",
         "red",
-        "red",
-        "red",
-        "red",
-        "red",
         "amber",
         "amber",
         "amber",
         "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
-        "green",
         "green",
         "green",
         "green",
@@ -141,42 +109,6 @@
         "green",
         "green",
         "green",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "red",
-        "red",
-        "red",
-        "red",
-        "red",
-        "red",
-        "red",
-        "red",
-        "red",
-        "red",
-        "red",
-        "red",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
-        "amber",
         "green",
         "green",
         "green",
@@ -192,13 +124,17 @@
       ]
     ]
   },
-  "siteImportExportLimitsMw": {
-    "maxImportMw": 7,
-    "maxExportMw": 7
+  "siteDataForm": {
+    "consumptionChoice": "yes",
+    "pvChoice": "yes",
+    "otherChoice": "no",
+    "powerMw": 0.5,
+    "pvInstalledMw": 1
   },
+  "simulationName": "Pre-run_demo",
   "v2gSimulationCommitted": {
-    "startDate": "2025-01-01",
-    "endDate": "2025-01-07",
+    "startDate": "2024-01-01",
+    "endDate": "2026-05-01",
     "energyBessMwh": 60,
     "maxPowerBessMw": 7,
     "socLowerPct": 20,
@@ -692,6 +628,5 @@
         "sunday": "in"
       }
     ]
-  },
-  "nbDaysPerPeriod": 3
+  }
 }

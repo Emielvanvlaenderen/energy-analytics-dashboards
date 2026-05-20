@@ -4,6 +4,7 @@ import { AlertModal } from './AlertModal'
 import { SimulationNameModal } from './SimulationNameModal'
 import { BRAND } from './brand'
 import { useStudyInputs } from './StudyInputsContext'
+import { projectFetch } from './lib/api'
 import { useProjectApi } from './useProjectApi'
 import { useSolutionPaths } from './useSolutionPaths'
 
@@ -68,7 +69,7 @@ export function V2gSimulationPage() {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch(`${apiBase}/study-inputs`)
+        const res = await projectFetch(`${apiBase}/study-inputs`)
         const data = await res.json().catch(() => ({}))
         if (cancelled || !res.ok || !data.ok || !data.study?.simulationName) return
         setLastSimulationName(String(data.study.simulationName))
@@ -123,7 +124,7 @@ export function V2gSimulationPage() {
     setLastSimulationName(simulationName)
     setSimulateLoading(true)
     try {
-      const saveRes = await fetch(`${apiBase}/study-inputs`, {
+      const saveRes = await projectFetch(`${apiBase}/study-inputs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -144,7 +145,7 @@ export function V2gSimulationPage() {
         return
       }
 
-      const runRes = await fetch(`${apiBase}/run-bess-optimisation`, {
+      const runRes = await projectFetch(`${apiBase}/run-bess-optimisation`, {
         method: 'POST',
       })
       const runData = await runRes.json().catch(() => ({}))

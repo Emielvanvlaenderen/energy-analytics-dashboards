@@ -1,60 +1,12 @@
 import fs from 'fs'
-import path from 'path'
 import { executeListBessSimulations } from './bessResultsCore.mjs'
-import {
-  isPathInsideRoot,
-  projectNotFound,
-  resolveProjectPaths,
-} from './projectPaths.mjs'
+import { resolveResultsCsvPath } from './preRunResults.mjs'
+import { projectNotFound, resolveProjectPaths } from './projectPaths.mjs'
 
 export { executeListBessSimulations as executeListV2gSimulations }
 
 function parseCsvLine(line) {
   return line.split(',').map((s) => s.trim())
-}
-
-function resolveResultsCsvPath(paths, fileQuery) {
-  const { resultsDir, lastOutputMarker, root } = paths
-
-  if (fileQuery && typeof fileQuery === 'string' && fileQuery.trim()) {
-    const safe = path.basename(fileQuery.trim())
-    if (safe !== fileQuery.trim() || safe.includes('..')) {
-      return { error: 'Invalid file.', status: 400 }
-    }
-    const csvPath = path.join(resultsDir, safe)
-    if (!isPathInsideRoot(root, csvPath) || !fs.existsSync(csvPath)) {
-      return { error: 'Results file not found.', status: 404 }
-    }
-    return { csvPath }
-  }
-
-  if (fs.existsSync(lastOutputMarker)) {
-    const rawPath = fs.readFileSync(lastOutputMarker, 'utf8').trim()
-    if (rawPath) {
-      const csvPath = path.resolve(rawPath)
-      if (isPathInsideRoot(root, csvPath) && fs.existsSync(csvPath)) {
-        return { csvPath }
-      }
-    }
-  }
-
-  if (!fs.existsSync(resultsDir)) {
-    return {
-      error: 'No optimisation results yet. Run the V2G simulation or add CSV files to results/.',
-      status: 404,
-    }
-  }
-  const names = fs
-    .readdirSync(resultsDir)
-    .filter((f) => f.endsWith('.csv'))
-    .sort()
-  if (!names.length) {
-    return {
-      error: 'No optimisation results yet. Run the V2G simulation or add CSV files to results/.',
-      status: 404,
-    }
-  }
-  return { csvPath: path.join(resultsDir, names[names.length - 1]) }
 }
 
 function monthKeyUtc(ms) {
@@ -81,8 +33,8 @@ function aggregateAddedByMonth(tMs, wholesale, imp, exp) {
   }
 }
 
-export function executeGetV2gResults(projectId, query = {}) {
-  const paths = resolveProjectPaths(projectId)
+export function executeGetV2gResults(projectId, query = {}, { paths: pathsIn } = {}) {
+  const paths = pathsIn ?? resolveProjectPaths(projectId)
   if (!paths) return projectNotFound(projectId)
 
   try {

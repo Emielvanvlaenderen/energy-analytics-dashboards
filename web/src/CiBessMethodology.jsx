@@ -206,11 +206,11 @@ export function CiBessMethodology() {
             when import charges are highest.
           </li>
           <li>
-            <strong>Export add-ons.</strong> Often <strong>small or mixed</strong>: sometimes a bit more
-            export-related cost if the battery pushes extra power out through the meter, but in other cases a
-            small benefit when solar that would have been exported is kept for <strong>on-site use</strong>{' '}
-            (self-consumption) via the battery—so injection or export add-ons move only a little. For many
-            C&amp;I sites this component is minor next to wholesale and import added value.
+            <strong>Export add-ons.</strong> Export DUoS is stored as a <strong>negative</strong> £/MWh (a
+            credit for sending power out). Extra export because of the BESS therefore shows as{' '}
+            <strong>positive</strong> <code>export_added</code>; less export (e.g. more on-site use of PV)
+            shows as negative. For many C&amp;I sites this component is still smaller than wholesale and
+            import added value.
           </li>
         </ul>
         <p className="methodology-page__p">

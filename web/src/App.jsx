@@ -8,6 +8,8 @@ import { SolutionLayout } from './SolutionLayout'
 import { SolutionNav } from './SolutionNav'
 import { SolutionRoutes } from './SolutionRoutes'
 import { getPlatformById } from './platforms/registry'
+import { AuthHeader } from './AuthHeader'
+import { AuthCallbackPage } from './AuthCallbackPage'
 
 function AppHeader() {
   const location = useLocation()
@@ -38,6 +40,7 @@ function AppHeader() {
             <SolutionNav />
           </ProjectProvider>
         ) : null}
+        <AuthHeader />
       </div>
     </header>
   )
@@ -51,6 +54,7 @@ function App() {
       <main className="main">
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
           <Route path="/solutions/:projectId/*" element={<SolutionLayout />}>
             <Route path="*" element={<SolutionRoutes />} />

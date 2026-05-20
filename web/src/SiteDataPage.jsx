@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { projectFetch } from './lib/api'
 import { useProjectApi } from './useProjectApi'
 import { useSolutionPaths } from './useSolutionPaths'
 import { AlertModal } from './AlertModal'
@@ -83,7 +84,7 @@ export function SiteDataPage() {
 
     setConsumptionLoading(true)
     try {
-      const res = await fetch(`${apiBase}/site-data/consumption-constant`, {
+      const res = await projectFetch(`${apiBase}/site-data/consumption-constant`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ powerMw: n }),
@@ -116,7 +117,7 @@ export function SiteDataPage() {
 
     setPvLoading(true)
     try {
-      const res = await fetch(`${apiBase}/site-data/pv-synthetic-from-yield`, {
+      const res = await projectFetch(`${apiBase}/site-data/pv-synthetic-from-yield`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ installedMw: n }),
@@ -191,7 +192,7 @@ export function SiteDataPage() {
     const maxIn = Number.parseFloat(String(maxImportMw))
     const maxEx = Number.parseFloat(String(maxExportMw))
     try {
-      const saveRes = await fetch(`${apiBase}/study-inputs`, {
+      const saveRes = await projectFetch(`${apiBase}/study-inputs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
