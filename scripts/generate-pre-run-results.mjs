@@ -218,9 +218,12 @@ async function writeSiteCsvs(paths, scenario) {
   }
 
   if (scenario.pvChoice === 'yes') {
-    const pv = writePvSyntheticFromYield(paths.dataDir, scenario.pvInstalledMw, [
-      path.join(REPO_ROOT, 'projects/ci-bess-uk/data'),
-    ])
+    const pv = await writePvSyntheticFromYield(paths.dataDir, scenario.pvInstalledMw, {
+      extraSearchDirs: [path.join(REPO_ROOT, 'projects/ci-bess-uk/data')],
+      startDate: scenario.startDate,
+      endDate: scenario.endDate,
+      useApi: true,
+    })
     if (!pv.ok) throw new Error(pv.error || 'PV synthetic CSV failed')
   } else {
     writeZeroPowerCsv(pvPath)

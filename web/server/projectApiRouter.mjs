@@ -208,8 +208,14 @@ export function createProjectApiRouter() {
     return res.json({ ok: true, files: result.files })
   })
 
-  router.post('/site-data/pv-synthetic-from-yield', (req, res) => {
-    const result = executePvSyntheticFromYield(req.projectId, req.body, ws(req))
+  router.post('/site-data/pv-synthetic-from-yield', async (req, res) => {
+    req.setTimeout(0)
+    res.setTimeout(0)
+    const result = await executePvSyntheticFromYield(
+      req.projectId,
+      req.body,
+      ws(req),
+    )
     if (!result.ok) {
       return res.status(result.status).json({ ok: false, error: result.error })
     }

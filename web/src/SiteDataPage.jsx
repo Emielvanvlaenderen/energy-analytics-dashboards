@@ -23,6 +23,8 @@ export function SiteDataPage() {
     siteDataForm,
     setSiteDataForm,
     siteImportExportLimitsMw,
+    bessSimulationCommitted,
+    v2gSimulationCommitted,
   } = useStudyInputs()
 
   const consumptionChoice = siteDataForm.consumptionChoice
@@ -120,7 +122,17 @@ export function SiteDataPage() {
       const res = await projectFetch(`${apiBase}/site-data/pv-synthetic-from-yield`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ installedMw: n }),
+        body: JSON.stringify({
+          installedMw: n,
+          startDate:
+            bessSimulationCommitted?.startDate ||
+            v2gSimulationCommitted?.startDate ||
+            '2024-01-01',
+          endDate:
+            bessSimulationCommitted?.endDate ||
+            v2gSimulationCommitted?.endDate ||
+            undefined,
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.ok) {

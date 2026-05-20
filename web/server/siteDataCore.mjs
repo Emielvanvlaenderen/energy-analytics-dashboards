@@ -73,7 +73,11 @@ export function validateInstalledMwPayload(body) {
   return null
 }
 
-export function executePvSyntheticFromYield(projectId, body, { paths: pathsIn } = {}) {
+export async function executePvSyntheticFromYield(
+  projectId,
+  body,
+  { paths: pathsIn } = {},
+) {
   const paths = pathsIn ?? resolveProjectPaths(projectId)
   if (!paths) return projectNotFound(projectId)
   if (!isProjectAvailable(projectId)) return projectNotAvailable(projectId)
@@ -85,9 +89,13 @@ export function executePvSyntheticFromYield(projectId, body, { paths: pathsIn } 
 
   try {
     const installedMw = Number.parseFloat(String(body.installedMw))
-    return writePvSyntheticFromYield(paths.dataDir, installedMw, [
-      path.join(paths.templateRoot, 'data'),
-    ])
+    return await writePvSyntheticFromYield(paths.dataDir, installedMw, {
+      extraSearchDirs: [path.join(paths.templateRoot, 'data')],
+      startDate:
+        typeof body?.startDate === 'string' ? body.startDate : undefined,
+      endDate: typeof body?.endDate === 'string' ? body.endDate : undefined,
+      useApi: true,
+    })
   } catch (e) {
     console.error(e)
     return {

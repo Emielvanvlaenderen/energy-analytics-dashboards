@@ -2,25 +2,31 @@ import fs from 'fs'
 import path from 'path'
 import { DateTime } from 'luxon'
 import { rowsToPowerCsv } from './generateConstantMwSeries.mjs'
-import { defaultSeriesEndLondon } from './seriesRange.mjs'
+import {
+  defaultSeriesEndLondon,
+  seriesStartLondon,
+} from './seriesRange.mjs'
 import { PROJECTS_DIR } from './repoRoot.mjs'
+import {
+  fetchPvLiveYieldRows,
+  PV_LIVE_YIELD_FILENAME,
+  yieldRowsToCsv,
+} from './pvLiveApi.mjs'
 
 export const PV_SYNTHETIC_FILENAME = 'site_pv_generation_synthetic_mw.csv'
 
-/** Prefer API-derived yield; fall back to bundled historical file with yield_pct. */
+/** Fallback when PV_Live API is unavailable. */
 export const PV_YIELD_FILE_CANDIDATES = [
-  'PV_Live_GB_yield_pct.csv',
+  PV_LIVE_YIELD_FILENAME,
   'PV_Live Historical Results.csv',
 ]
 
-/** National GB yield bundled with C&I BESS; shared by all UK simulators. */
 export const SHARED_PV_YIELD_DATA_DIR = path.join(
   PROJECTS_DIR,
   'ci-bess-uk',
   'data',
 )
 
-/** First existing candidate file in any of the given data directories. */
 export function findYieldCsvPath(...searchDirs) {
   for (const dataDir of searchDirs.filter(Boolean)) {
     for (const name of PV_YIELD_FILE_CANDIDATES) {
@@ -59,57 +65,80 @@ export function parseYieldCsvFile(filePath) {
   return out
 }
 
-/**
- * Power (MW) = (yield_pct / 100) × installed_mw for each interval.
- * Timestamps follow the yield file (GMT); local column is Europe/London.
- */
-function yieldSlotKey(dt) {
-  return `${String(dt.month).padStart(2, '0')}-${String(dt.day).padStart(2, '0')}-${String(dt.hour).padStart(2, '0')}-${String(dt.minute).padStart(2, '0')}`
+/** ISO date `YYYY-MM-DD` → UTC range for PV_Live fetch. */
+export function resolvePvFetchRange(startDate, endDate) {
+  const start =
+    startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate)
+      ? `${startDate}T00:00:00Z`
+      : seriesStartLondon().toUTC().toFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
+
+  let endIso
+  if (endDate && /^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    endIso = `${endDate}T23:30:00Z`
+  } else {
+    const end = defaultSeriesEndLondon()
+    endIso = end
+      ? end.toUTC().toFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
+      : new Date().toISOString()
+  }
+
+  return { startIso: start, endIso: endIso }
 }
 
-/** Latest year's yield per calendar half-hour slot (month-day-hour-minute). */
-function buildSeasonalYieldLookup(yieldRows) {
-  const map = new Map()
-  for (const row of yieldRows) {
-    const dt = DateTime.fromISO(row.datetime_gmt, { zone: 'utc' })
-    if (!dt.isValid) continue
-    const key = yieldSlotKey(dt)
-    const prev = map.get(key)
-    if (!prev || dt.year >= prev.year) {
-      map.set(key, { yieldPct: row.yieldPct, year: dt.year })
+export function filterYieldToDateRange(yieldRows, startDate, endDate) {
+  if (!startDate || !endDate) return yieldRows
+  const t0 = DateTime.fromISO(`${startDate}T00:00:00`, { zone: 'utc' })
+  const t1 = DateTime.fromISO(`${endDate}T23:59:59`, { zone: 'utc' })
+  return yieldRows.filter((r) => {
+    const t = DateTime.fromISO(r.datetime_gmt, { zone: 'utc' })
+    return t.isValid && t >= t0 && t <= t1
+  })
+}
+
+function writeYieldCache(dataDir, yieldRows) {
+  fs.mkdirSync(dataDir, { recursive: true })
+  const cachePath = path.join(dataDir, PV_LIVE_YIELD_FILENAME)
+  fs.writeFileSync(cachePath, yieldRowsToCsv(yieldRows), 'utf8')
+  return cachePath
+}
+
+/**
+ * Load yield from PV_Live API (preferred) or local CSV cache.
+ * @param {string} dataDir
+ * @param {{ startDate?: string, endDate?: string, useApi?: boolean }} options
+ */
+export async function loadYieldRows(dataDir, { startDate, endDate, useApi = true } = {}) {
+  const { startIso, endIso } = resolvePvFetchRange(startDate, endDate)
+
+  if (useApi && process.env.PV_LIVE_DISABLE_API !== 'true') {
+    try {
+      const rows = await fetchPvLiveYieldRows({ startIso, endIso })
+      if (rows.length) {
+        writeYieldCache(dataDir, rows)
+        return { rows, source: 'PV_Live API' }
+      }
+    } catch (e) {
+      console.warn('[pv] PV_Live API:', e instanceof Error ? e.message : e)
     }
   }
-  return map
-}
 
-/**
- * Extend yield through last completed half-hour using seasonal pattern
- * (same month/day/time from historical years), not a flat last value.
- */
-export function extendYieldRowsToSeriesEnd(yieldRows) {
-  if (!yieldRows?.length) return yieldRows
-  const end = defaultSeriesEndLondon()
-  if (!end) return yieldRows
-
-  const seasonal = buildSeasonalYieldLookup(yieldRows)
-  const last = yieldRows[yieldRows.length - 1]
-  let dt = DateTime.fromISO(last.datetime_gmt, { zone: 'utc' })
-  if (!dt.isValid) return yieldRows
-
-  const fallbackPct = last.yieldPct
-  const out = [...yieldRows]
-  dt = dt.plus({ minutes: 30 })
-  while (dt <= end) {
-    const entry = seasonal.get(yieldSlotKey(dt))
-    out.push({
-      datetime_gmt: dt.toFormat("yyyy-MM-dd'T'HH:mm:ss'Z'"),
-      yieldPct: entry?.yieldPct ?? fallbackPct,
-    })
-    dt = dt.plus({ minutes: 30 })
+  const src = findYieldCsvPath(
+    dataDir,
+    path.join(dataDir, '..', 'data'),
+    SHARED_PV_YIELD_DATA_DIR,
+  )
+  if (!src) {
+    throw new Error(
+      'No PV yield data. PV_Live API fetch failed and no local yield CSV was found.',
+    )
   }
-  return out
+  return {
+    rows: filterYieldToDateRange(parseYieldCsvFile(src), startDate, endDate),
+    source: path.basename(src),
+  }
 }
 
+/** Power (MW) = (yield_pct / 100) × installed_mw per interval. */
 export function powerRowsFromYield(yieldRows, installedMw) {
   return yieldRows.map(({ datetime_gmt, yieldPct }) => {
     const utc = DateTime.fromISO(datetime_gmt, { zone: 'utc' })
@@ -119,24 +148,41 @@ export function powerRowsFromYield(yieldRows, installedMw) {
     const powerMw = (yieldPct / 100) * installedMw
     return {
       utcStr: utc.toFormat('yyyy-LL-dd HH:mm:ss'),
-      localStr: utc.setZone('Europe/London').toFormat('yyyy-LL-dd HH:mm:ss'),
+      localStr: utc.setZone('Europe/London').toFormat('yyyy-MM-dd HH:mm:ss'),
       powerMw,
     }
   })
 }
 
-export function writePvSyntheticFromYield(dataDir, installedMw, extraSearchDirs = []) {
-  const src = findYieldCsvPath(dataDir, ...extraSearchDirs, SHARED_PV_YIELD_DATA_DIR)
-  if (!src) {
+/**
+ * Build site_pv_generation_synthetic_mw.csv from PV_Live API yield × installed MW.
+ */
+export async function writePvSyntheticFromYield(
+  dataDir,
+  installedMw,
+  {
+    extraSearchDirs = [],
+    startDate,
+    endDate,
+    useApi = true,
+  } = {},
+) {
+  void extraSearchDirs
+
+  const { rows: yieldRows, source } = await loadYieldRows(dataDir, {
+    startDate,
+    endDate,
+    useApi,
+  })
+
+  if (!yieldRows.length) {
     return {
       ok: false,
       status: 404,
-      error:
-        'No PV yield file found. Add PV_Live_GB_yield_pct.csv (from scripts/fetch_pv_live_yield.mjs) or PV_Live Historical Results.csv with a yield_pct column to the data folder.',
+      error: 'No PV yield rows for the requested date range.',
     }
   }
 
-  const yieldRows = extendYieldRowsToSeriesEnd(parseYieldCsvFile(src))
   const rows = powerRowsFromYield(yieldRows, installedMw)
   fs.mkdirSync(dataDir, { recursive: true })
   const outPath = path.join(dataDir, PV_SYNTHETIC_FILENAME)
@@ -149,7 +195,17 @@ export function writePvSyntheticFromYield(dataDir, installedMw, extraSearchDirs 
       filename: PV_SYNTHETIC_FILENAME,
       directory: dataDir,
       rowCount: rows.length,
-      sourceYieldFile: path.basename(src),
+      sourceYieldFile: source,
     },
+  }
+}
+
+/** Study committed dates for PV fetch window. */
+export function pvDatesFromStudy(study) {
+  const b = study?.bessSimulationCommitted
+  const v = study?.v2gSimulationCommitted
+  return {
+    startDate: b?.startDate || v?.startDate,
+    endDate: b?.endDate || v?.endDate,
   }
 }

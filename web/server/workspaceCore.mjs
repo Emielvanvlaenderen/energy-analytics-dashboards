@@ -6,6 +6,7 @@ import { getProjectById } from './projectsRegistry.mjs'
 import {
   PV_YIELD_FILE_CANDIDATES,
   SHARED_PV_YIELD_DATA_DIR,
+  pvDatesFromStudy,
   writePvSyntheticFromYield,
 } from './pvYieldSynthetic.mjs'
 
@@ -77,21 +78,32 @@ export function syncDayAheadFromTemplate(paths) {
   fs.copyFileSync(src, dest)
 }
 
-/** Rebuild PV synthetic from yield through series end (study installed MW). */
-export function refreshPvFromStudy(paths, study) {
+/** Rebuild PV synthetic from PV_Live API yield × study installed MW. */
+export async function refreshPvFromStudy(paths, study) {
   const form = study?.siteDataForm
   if (form?.pvChoice !== 'yes') return
   const mw = Number.parseFloat(String(form.pvInstalledMw ?? ''))
   if (!Number.isFinite(mw) || mw <= 0) return
-  writePvSyntheticFromYield(paths.dataDir, mw, [
-    path.join(paths.templateRoot, 'data'),
-  ])
+  const { startDate, endDate } = pvDatesFromStudy(study)
+  try {
+    const result = await writePvSyntheticFromYield(paths.dataDir, mw, {
+      extraSearchDirs: [path.join(paths.templateRoot, 'data')],
+      startDate,
+      endDate,
+      useApi: true,
+    })
+    if (!result?.ok) {
+      console.warn('[pv] synthetic CSV:', result.error)
+    }
+  } catch (e) {
+    console.warn('[pv] refresh failed:', e instanceof Error ? e.message : e)
+  }
 }
 
-/** Day-ahead from template; PV regenerated from study (yield extended to series end). */
-export function refreshMarketDataForStudy(paths, study) {
+/** Day-ahead from template; PV from PV_Live API for study date range. */
+export async function refreshMarketDataForStudy(paths, study) {
   syncDayAheadFromTemplate(paths)
-  refreshPvFromStudy(paths, study)
+  await refreshPvFromStudy(paths, study)
 }
 
 export function ensureGuestSession(req, res) {

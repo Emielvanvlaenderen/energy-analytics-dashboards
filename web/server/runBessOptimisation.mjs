@@ -12,7 +12,7 @@ import { refreshMarketDataForStudy } from './workspaceCore.mjs'
  * Runs `projects/{id}/optimisation/run_optimisation_from_study.py`.
  * POST body may include `studySnapshot` (written on this workspace before run).
  */
-export function executeRunBessOptimisation(projectId, body, { paths: pathsIn } = {}) {
+export async function executeRunBessOptimisation(projectId, body, { paths: pathsIn } = {}) {
   const paths = pathsIn
   if (!paths?.studyInputsPath) {
     return Promise.resolve({
@@ -38,7 +38,7 @@ export function executeRunBessOptimisation(projectId, body, { paths: pathsIn } =
   } catch {
     /* optional */
   }
-  refreshMarketDataForStudy(paths, study)
+  await refreshMarketDataForStudy(paths, study)
 
   if (!fs.existsSync(paths.runScript)) {
     return Promise.resolve({

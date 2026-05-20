@@ -8,7 +8,7 @@ import {
 } from './persistStudyInputsForRun.mjs'
 import { refreshMarketDataForStudy } from './workspaceCore.mjs'
 
-export function executeRunV2gOptimisation(projectId, body, { paths: pathsIn } = {}) {
+export async function executeRunV2gOptimisation(projectId, body, { paths: pathsIn } = {}) {
   const paths = pathsIn
   if (!paths?.studyInputsPath) {
     return Promise.resolve({
@@ -38,7 +38,7 @@ export function executeRunV2gOptimisation(projectId, body, { paths: pathsIn } = 
   } catch {
     /* optional */
   }
-  refreshMarketDataForStudy(paths, study)
+  await refreshMarketDataForStudy(paths, study)
 
   const script = paths.runScript
   if (!fs.existsSync(script)) {

@@ -18,7 +18,11 @@ import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = path.join(__dirname, '..')
-const OUT = path.join(PROJECT_ROOT, 'data', 'PV_Live_GB_yield_pct.csv')
+const OUT = path.join(
+  PROJECT_ROOT,
+  'projects/ci-bess-uk/data',
+  'PV_Live_GB_yield_pct.csv',
+)
 
 const API = 'https://api.pvlive.uk/pvlive/api/v4/gsp/0'
 
