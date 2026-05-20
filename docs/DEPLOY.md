@@ -70,7 +70,7 @@ Render Blueprint has **no UI** to change plan or remove disk — it reads `rende
 1. Render → **New** → **Blueprint** (uses `render.yaml`) **or** **Web Service** (manual).
 2. Settings (Blueprint / manual):
    - **Root directory:** `web`
-   - **Build:** `npm ci && npm run build && pip3 install -r ../projects/ci-bess-uk/optimisation/requirements.txt -r ../projects/v2g-uk/optimisation/requirements.txt`
+   - **Build:** `npm ci --include=dev && npm run build && pip3 install -r ../projects/ci-bess-uk/optimisation/requirements.txt -r ../projects/v2g-uk/optimisation/requirements.txt` (`--include=dev` needed because `NODE_ENV=production` skips Vite)
    - **Start:** `node server/index.mjs` (or `npm start`)
    - **Plan:** **Free** (default in repo) or Starter for production.
 
