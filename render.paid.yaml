@@ -1,7 +1,5 @@
-# Render Blueprint — https://render.com/docs/blueprint-spec
-#
-# Free tier: no persistent disk (guest workspaces are ephemeral until spin-down/redeploy).
-# For always-on + disk, change plan to starter and add a disk block — see docs/DEPLOY.md.
+# Optional paid Blueprint (~$9.50/mo): Starter + 10 GB disk at /var/data.
+# To use: copy to render.yaml (or merge disk block + plan: starter) before deploying.
 services:
   - type: web
     name: energy-analytics-api
@@ -9,12 +7,18 @@ services:
     rootDir: web
     buildCommand: npm ci && npm run build && pip3 install -r ../projects/ci-bess-uk/optimisation/requirements.txt -r ../projects/v2g-uk/optimisation/requirements.txt
     startCommand: node server/index.mjs
-    plan: free
+    plan: starter
+    disk:
+      name: energy-data
+      mountPath: /var/data
+      sizeGB: 10
     envVars:
       - key: NODE_ENV
         value: production
       - key: DATA_ROOT
-        value: /tmp/energy-data
+        value: /var/data
+      - key: PORT
+        value: 3001
       - key: PYTHON
         value: python3
       - key: CORS_ORIGINS

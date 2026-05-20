@@ -49,23 +49,39 @@ This app is split into three parts:
 
 ---
 
-## 2. Render (API + Python + disk)
+## 2. Render (API + Python)
+
+### 2.0 Free vs paid (Blueprint)
+
+The repo [`render.yaml`](../render.yaml) defaults to **free** (`plan: free`, **no disk**). Estimated cost: **$0**.
+
+| | Free (`render.yaml`) | Paid ([`render.paid.yaml`](../render.paid.yaml)) |
+|--|----------------------|--------------------------------------------------|
+| Cost | $0 | ~$9.50/mo (Starter + 10 GB disk) |
+| Disk | None — data under `/tmp/energy-data` (ephemeral) | `/var/data` persists |
+| Idle | Spins down after ~15 min; ~1 min cold start | Always on |
+
+Render Blueprint has **no UI** to change plan or remove disk — it reads `render.yaml` from GitHub. After we change that file, **re-sync** or re-create the Blueprint so pricing updates.
+
+**Free limitations:** guest workspace files are lost on redeploy/restart/spin-down; pre-run demos from the repo still work.
 
 ### 2.1 Create Web Service
 
-1. Render → **New** → **Web Service** → connect your GitHub repo.
-2. Settings (or use repo [`render.yaml`](../render.yaml)):
+1. Render → **New** → **Blueprint** (uses `render.yaml`) **or** **Web Service** (manual).
+2. Settings (Blueprint / manual):
    - **Root directory:** `web`
    - **Build:** `npm ci && npm run build && pip3 install -r ../projects/ci-bess-uk/optimisation/requirements.txt -r ../projects/v2g-uk/optimisation/requirements.txt`
-   - **Start:** `npm start` (runs `node server/index.mjs`)
-   - **Plan:** Starter or higher (optimisations can run long; timeout is raised in `server/index.mjs`).
+   - **Start:** `node server/index.mjs` (or `npm start`)
+   - **Plan:** **Free** (default in repo) or Starter for production.
 
-### 2.2 Persistent disk
+### 2.2 Persistent disk (paid only)
 
-1. Service → **Disks** → Add disk:
-   - Mount path: `/var/data`
-   - Size: 10 GB (adjust as needed)
-2. This holds per-guest and per-user workspaces under `/var/data/workspaces/`.
+Free instances **cannot** attach disks on Render.
+
+For paid deploy, use [`render.paid.yaml`](../render.paid.yaml) as `render.yaml`, or add a disk in the Dashboard:
+
+1. Service → **Disks** → Add disk: mount `/var/data`, ~10 GB.
+2. Set `DATA_ROOT=/var/data`.
 
 ### 2.3 Environment variables
 
@@ -74,8 +90,8 @@ Set in Render → **Environment**:
 | Variable | Example / notes |
 |----------|------------------|
 | `NODE_ENV` | `production` |
-| `DATA_ROOT` | `/var/data` |
-| `PORT` | `3001` (Render sets `PORT`; keep in sync) |
+| `DATA_ROOT` | `/tmp/energy-data` (free) or `/var/data` (with disk) |
+| `PORT` | Set automatically by Render (do not hard-code on free) |
 | `PYTHON` | `python3` |
 | `CORS_ORIGINS` | `https://your-app.netlify.app,http://localhost:5173` |
 | `SUPABASE_URL` | `https://xxx.supabase.co` |
