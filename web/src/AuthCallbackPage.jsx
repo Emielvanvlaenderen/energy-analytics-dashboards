@@ -9,21 +9,70 @@ export function AuthCallbackPage() {
   useEffect(() => {
     if (!supabase) {
       setError('Sign-in is not configured.')
-      return
+      return undefined
     }
-    supabase.auth.getSession().then(({ data, error: err }) => {
-      if (err) {
-        setError(err.message)
-        return
-      }
-      if (data.session) {
-        const returnTo = sessionStorage.getItem('ea_auth_return') || '/'
-        sessionStorage.removeItem('ea_auth_return')
-        navigate(returnTo, { replace: true })
-      } else {
-        setError('No session returned from GitHub.')
-      }
+
+    let done = false
+    const finish = (session) => {
+      if (done || !session) return
+      done = true
+      const returnTo = sessionStorage.getItem('ea_auth_return') || '/'
+      sessionStorage.removeItem('ea_auth_return')
+      navigate(returnTo, { replace: true })
+    }
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) finish(session)
     })
+
+    ;(async () => {
+      try {
+        const code = new URLSearchParams(window.location.search).get('code')
+        if (code) {
+          const { error: exchangeError } =
+            await supabase.auth.exchangeCodeForSession(code)
+          if (exchangeError) {
+            setError(exchangeError.message)
+            return
+          }
+        }
+
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession()
+        if (sessionError) {
+          setError(sessionError.message)
+          return
+        }
+        if (session) {
+          finish(session)
+          return
+        }
+
+        if (code) {
+          await new Promise((r) => setTimeout(r, 2000))
+          const { data: { session: retry } } = await supabase.auth.getSession()
+          if (retry) {
+            finish(retry)
+            return
+          }
+        }
+
+        if (!done) {
+          setError(
+            'No session returned from GitHub. Add this URL in Supabase → Authentication → Redirect URLs: ' +
+              `${window.location.origin}/auth/callback`,
+          )
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Sign-in failed.')
+      }
+    })()
+
+    return () => subscription.unsubscribe()
   }, [navigate])
 
   return (

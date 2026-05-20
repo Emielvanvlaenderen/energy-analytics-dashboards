@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { projectFetch } from './lib/api'
+import { formatApiError, parseApiResponse, projectFetch } from './lib/api'
 import { useProjectApi } from './useProjectApi'
 import { useSolutionPaths } from './useSolutionPaths'
 import { AlertModal } from './AlertModal'
@@ -91,10 +91,10 @@ export function DuosChargesPage() {
           bandMatrix,
         }),
       })
-      const data = await res.json().catch(() => ({}))
+      const { data } = await parseApiResponse(res)
       if (!res.ok || !data.ok) {
         throw new Error(
-          data.error || res.statusText || 'Could not generate CSV files',
+          formatApiError(res, data, 'Could not generate CSV files'),
         )
       }
       navigateAfterModalClose.current = true

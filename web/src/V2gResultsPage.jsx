@@ -9,7 +9,7 @@ import {
   formatSimulationGroupOption,
   groupSimulationsByName,
 } from './simulationFilename'
-import { projectFetch } from './lib/api'
+import { formatApiError, parseApiResponse, projectFetch } from './lib/api'
 import { useProjectApi } from './useProjectApi'
 import { SaveSimulationActions } from './SaveSimulationActions'
 
@@ -396,10 +396,10 @@ export function V2gResultsPage() {
     ;(async () => {
       try {
         const simRes = await projectFetch(`${apiBase}/bess-simulations`)
-        const simData = await simRes.json().catch(() => ({}))
+        const { data: simData } = await parseApiResponse(simRes)
         if (cancelled) return
         if (!simRes.ok || !simData.ok) {
-          setError(simData.error || 'Could not list simulations.')
+          setError(formatApiError(simRes, simData, 'Could not list simulations.'))
           setLoading(false)
           return
         }
@@ -426,6 +426,7 @@ export function V2gResultsPage() {
             : initialGroup?.runs[0]?.filename ?? list[0]?.filename ?? null
         setSelectedSimulationName(initialName)
         setSelectedFile(initialFile)
+        setLoading(false)
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : 'Could not reach the API.')
@@ -448,10 +449,10 @@ export function V2gResultsPage() {
         const res = await projectFetch(
           `${apiBase}/bess-results?file=${encodeURIComponent(selectedFile)}`,
         )
-        const data = await res.json().catch(() => ({}))
+        const { data } = await parseApiResponse(res)
         if (cancelled) return
         if (!res.ok || !data.ok) {
-          setError(data.error || 'Could not load results.')
+          setError(formatApiError(res, data, 'Could not load results.'))
           setPayload(null)
         } else {
           setPayload(data)

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from './AuthContext'
-import { apiFetch } from './lib/api'
+import { apiFetch, formatApiError, parseApiResponse } from './lib/api'
 
 export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
   const { user, accessToken, signInWithGitHub, supabaseConfigured } = useAuth()

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Navigate, Outlet, useParams } from 'react-router-dom'
 import { ProjectProvider } from './ProjectContext'
 import { CI_BESS_UK_ID, getPlatformById } from './platforms/registry'
@@ -8,6 +9,11 @@ import { StudyInputsProvider } from './StudyInputsContext'
 export function SolutionLayout() {
   const { projectId } = useParams()
   const platform = getPlatformById(projectId)
+
+  /** Wake Render free tier before study API calls (avoids first-request 502). */
+  useEffect(() => {
+    fetch('/api/health', { credentials: 'include' }).catch(() => {})
+  }, [])
 
   if (!platform) {
     return <Navigate to="/" replace />
