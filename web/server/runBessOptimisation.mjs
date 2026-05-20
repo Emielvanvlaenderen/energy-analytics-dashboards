@@ -6,6 +6,7 @@ import {
   persistStudyInputsBeforeRun,
   studyInputsMissingResponse,
 } from './persistStudyInputsForRun.mjs'
+import { syncTemplateMarketDataFiles } from './workspaceCore.mjs'
 
 /**
  * Runs `projects/{id}/optimisation/run_optimisation_from_study.py`.
@@ -23,6 +24,8 @@ export function executeRunBessOptimisation(projectId, body, { paths: pathsIn } =
   if (!isProjectAvailable(projectId)) {
     return Promise.resolve(projectNotAvailable(projectId))
   }
+
+  syncTemplateMarketDataFiles(paths)
 
   const saved = persistStudyInputsBeforeRun(projectId, body, paths)
   if (!saved.ok) return Promise.resolve(saved)

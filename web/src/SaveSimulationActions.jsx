@@ -1,22 +1,54 @@
 import { useState } from 'react'
 import { useAuth } from './AuthContext'
-import { apiFetch, formatApiError, parseApiResponse } from './lib/api'
+import {
+  formatApiError,
+  jsonBodyWithGuest,
+  parseApiResponse,
+  projectFetch,
+} from './lib/api'
+import { readStoredGuestId } from './lib/guestSession'
 
 export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
   const { user, accessToken, signInWithGitHub, supabaseConfigured } = useAuth()
   const [saving, setSaving] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const [message, setMessage] = useState(null)
 
   const canSave = Boolean(saveLabel?.trim() && selectedFile)
 
-  function downloadGuestCsv() {
+  async function downloadGuestCsv() {
     if (!selectedFile) {
       setMessage('Select a run first.')
       return
     }
-    const q = new URLSearchParams({ file: selectedFile })
-    const url = `${apiBase}/bess-results/download?${q}`
-    window.open(url, '_blank', 'noopener,noreferrer')
+    setDownloading(true)
+    setMessage(null)
+    try {
+      const q = new URLSearchParams({ file: selectedFile })
+      const guestId = readStoredGuestId()
+      if (guestId) q.set('guestSessionId', guestId)
+
+      const res = await projectFetch(`${apiBase}/bess-results/download?${q}`)
+      if (!res.ok) {
+        const { data } = await parseApiResponse(res)
+        setMessage(formatApiError(res, data, 'Could not download CSV.'))
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = selectedFile
+      a.rel = 'noopener'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Could not download CSV.')
+    } finally {
+      setDownloading(false)
+    }
   }
 
   async function saveToAccount() {
@@ -32,10 +64,13 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
     setSaving(true)
     setMessage(null)
     try {
-      const res = await apiFetch(`${apiBase}/saved-simulations`, {
+      const headers = { 'Content-Type': 'application/json' }
+      if (accessToken) headers.Authorization = `Bearer ${accessToken}`
+
+      const res = await projectFetch(`${apiBase}/saved-simulations`, {
         method: 'POST',
-        authToken: accessToken,
-        body: JSON.stringify({
+        headers,
+        body: jsonBodyWithGuest({
           name: saveLabel.trim(),
           file: selectedFile,
         }),
@@ -62,10 +97,10 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
         <button
           type="button"
           className="btn btn--primary"
-          disabled={!selectedFile}
+          disabled={!selectedFile || downloading}
           onClick={downloadGuestCsv}
         >
-          Download CSV
+          {downloading ? 'Downloading…' : 'Download CSV'}
         </button>
         {supabaseConfigured ? (
           <button

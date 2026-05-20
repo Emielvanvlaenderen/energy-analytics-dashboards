@@ -40,15 +40,47 @@ export function parseCookies(header) {
   return out
 }
 
-/** Cookie, X-EA-Guest header, or JSON body (cross-origin cookies often blocked). */
+/** Cookie, header, query, or JSON body (cross-origin cookies often blocked). */
 export function resolveGuestSessionId(req) {
   const cookies = parseCookies(req.headers.cookie)
   if (isGuestUuid(cookies[GUEST_COOKIE])) return cookies[GUEST_COOKIE]
   const header = req.headers[GUEST_HEADER]
   if (isGuestUuid(header)) return header
+  const queryId = req.query?.guestSessionId
+  if (isGuestUuid(queryId)) return queryId
   const bodyId = req.body?.guestSessionId
   if (isGuestUuid(bodyId)) return bodyId
   return null
+}
+
+/** Guest workspace for results when user ran as guest then signs in to save/download. */
+export function resolveResultsPaths(req) {
+  const projectId = req.projectId
+  if (!projectId) return req.paths ?? null
+  const guestId =
+    req.query?.guestSessionId ||
+    req.body?.guestSessionId ||
+    (req.workspaceId?.startsWith('guest:') ? req.workspaceId.slice(6) : null)
+  if (isGuestUuid(guestId)) {
+    return resolveProjectPaths(projectId, `guest:${guestId}`)
+  }
+  return req.paths ?? null
+}
+
+const MARKET_DATA_FILES = [
+  'day-ahead-prices.csv',
+  'site_pv_generation_synthetic_mw.csv',
+]
+
+/** Refresh long-horizon market/PV series from repo template (fixes clipped results). */
+export function syncTemplateMarketDataFiles(paths) {
+  for (const name of MARKET_DATA_FILES) {
+    const src = path.join(paths.templateRoot, 'data', name)
+    const dest = path.join(paths.dataDir, name)
+    if (!fs.existsSync(src)) continue
+    fs.mkdirSync(paths.dataDir, { recursive: true })
+    fs.copyFileSync(src, dest)
+  }
 }
 
 export function ensureGuestSession(req, res) {

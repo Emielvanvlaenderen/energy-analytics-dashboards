@@ -6,6 +6,7 @@ import {
   persistStudyInputsBeforeRun,
   studyInputsMissingResponse,
 } from './persistStudyInputsForRun.mjs'
+import { syncTemplateMarketDataFiles } from './workspaceCore.mjs'
 
 export function executeRunV2gOptimisation(projectId, body, { paths: pathsIn } = {}) {
   const paths = pathsIn
@@ -19,6 +20,8 @@ export function executeRunV2gOptimisation(projectId, body, { paths: pathsIn } = 
   if (!isProjectAvailable(projectId)) {
     return Promise.resolve(projectNotAvailable(projectId))
   }
+
+  syncTemplateMarketDataFiles(paths)
 
   const saved = persistStudyInputsBeforeRun(projectId, body, paths)
   if (!saved.ok) return Promise.resolve(saved)

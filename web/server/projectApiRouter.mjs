@@ -18,6 +18,7 @@ import { executeRunBessOptimisation } from './runBessOptimisation.mjs'
 import { executeRunV2gOptimisation } from './runV2gOptimisation.mjs'
 import { executeGetV2gResults } from './v2gResultsCore.mjs'
 import { projectNotFound } from './projectPaths.mjs'
+import { resolveResultsPaths } from './workspaceCore.mjs'
 import { getProjectById } from './projectsRegistry.mjs'
 import { isSupabaseConfigured } from './authCore.mjs'
 import {
@@ -78,7 +79,9 @@ export function createProjectApiRouter() {
   })
 
   router.get('/bess-simulations', (req, res) => {
-    const result = executeListBessSimulations(req.projectId, ws(req))
+    const result = executeListBessSimulations(req.projectId, {
+      paths: resolveResultsPaths(req),
+    })
     if (!result.ok) {
       return res.status(result.status).json({ ok: false, error: result.error })
     }
@@ -113,7 +116,11 @@ export function createProjectApiRouter() {
   router.get('/bess-results/download', (req, res) => {
     const file =
       typeof req.query.file === 'string' ? req.query.file : undefined
-    const result = executeDownloadResults(req.projectId, { file }, ws(req))
+    const result = executeDownloadResults(
+      req.projectId,
+      { file },
+      { paths: resolveResultsPaths(req) },
+    )
     if (!result.ok) {
       return res.status(result.status).json({ ok: false, error: result.error })
     }
@@ -141,7 +148,7 @@ export function createProjectApiRouter() {
       req.projectId,
       req.authUser.id,
       req.body,
-      ws(req),
+      { paths: resolveResultsPaths(req) },
     )
     if (!result.ok) {
       return res.status(result.status).json({ ok: false, error: result.error })

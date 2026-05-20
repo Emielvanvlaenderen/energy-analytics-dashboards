@@ -21,10 +21,16 @@ export function jsonBodyWithGuest(payload) {
 }
 
 /** fetch with guest cookie + X-EA-Guest header + guestSessionId in JSON bodies. */
-export function projectFetch(url, init = {}) {
+export function projectFetch(urlIn, init = {}) {
   const headers = new Headers(init.headers || {})
   const guestId = readStoredGuestId()
   if (guestId) headers.set('X-EA-Guest', guestId)
+
+  let url = urlIn
+  if (guestId && typeof url === 'string' && !url.includes('guestSessionId=')) {
+    const sep = url.includes('?') ? '&' : '?'
+    url = `${url}${sep}guestSessionId=${encodeURIComponent(guestId)}`
+  }
 
   let body = init.body
   if (guestId && typeof body === 'string') {
@@ -103,8 +109,14 @@ export function formatApiError(res, data, fallback) {
   return fallback || `Request failed (HTTP ${res.status})`
 }
 
+function resolveApiUrl(path) {
+  if (/^https?:\/\//i.test(path)) return path
+  const root = getApiRoot()
+  return `${root}${path.startsWith('/') ? path : `/${path}`}`
+}
+
 export async function apiFetch(path, { authToken, headers: extra, ...init } = {}) {
-  const url = `${getApiRoot()}${path.startsWith('/') ? path : `/${path}`}`
+  const url = resolveApiUrl(path)
   const headers = { ...extra }
   if (init.body != null && !headers['Content-Type'] && !(init.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json'
