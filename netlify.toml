@@ -1,6 +1,7 @@
+# Prefer config in web/netlify.toml when base directory is `web`.
 [build]
   base = "web"
-  command = "npm ci && npm run build"
+  command = "npm ci --include=dev && npm run build"
   publish = "dist"
 
 [build.environment]
