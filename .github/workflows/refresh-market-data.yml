@@ -10,16 +10,38 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
-      - name: POST Render refresh endpoint
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Refresh Ember + PV_Live → Supabase
+        working-directory: web
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PYTHON: python3
+        run: node server/jobs/refreshMarketData.mjs
+
+      - name: POST Render cron endpoint (optional sync)
+        continue-on-error: true
         env:
           RENDER_API_URL: ${{ secrets.RENDER_API_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           if [ -z "$RENDER_API_URL" ] || [ -z "$CRON_SECRET" ]; then
-            echo "Set GitHub secrets RENDER_API_URL and CRON_SECRET"
-            exit 1
+            echo "Skipping Render cron ping (RENDER_API_URL or CRON_SECRET not set)"
+            exit 0
           fi
-          curl -fsS --retry 3 --retry-delay 30 -X POST \
+          curl -fsS --retry 2 --retry-delay 15 -X POST \
             "${RENDER_API_URL%/}/api/cron/refresh-market-data" \
             -H "X-Cron-Secret: ${CRON_SECRET}" \
             -H "Content-Type: application/json"
