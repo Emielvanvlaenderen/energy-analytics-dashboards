@@ -9,9 +9,7 @@ import { buildStudySnapshot } from './lib/studySnapshot'
 import { useProjectApi } from './useProjectApi'
 import { useSolutionPaths } from './useSolutionPaths'
 
-const BESS_DURATIONS = [2, 3, 4, 6, 8]
-
-function parseIntOrEmpty(raw) {
+import { BESS_DURATIONS } from './lib/bessDurations'
   if (raw === '' || raw === '-' || raw === '.') return ''
   const n = Number.parseInt(String(raw), 10)
   return Number.isFinite(n) ? n : ''

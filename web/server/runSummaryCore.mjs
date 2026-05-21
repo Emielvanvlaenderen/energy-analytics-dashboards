@@ -59,47 +59,10 @@ export function summarizeDuosProfile(bandMatrix) {
   return text
 }
 
-function formatDuosRates(duos) {
-  if (!duos || typeof duos !== 'object') return null
-  const parts = []
-  for (const color of DUOS_COLORS) {
-    const row = duos[color]
-    if (!row) continue
-    const imp = row.import ?? '—'
-    const exp = row.export ?? '—'
-    parts.push(`${color}: import ${imp}, export ${exp} £/MWh`)
-  }
-  return parts.length ? parts.join(' · ') : null
-}
-
 function readNumericMw(raw) {
   if (raw === '' || raw == null) return null
   const n = Number.parseFloat(String(raw))
   return Number.isFinite(n) ? n : null
-}
-
-function summarizeV2gSchedule(schedule) {
-  const rows = schedule?.rows
-  if (!Array.isArray(rows) || !rows.length) return null
-
-  const weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
-  const counts = new Map()
-  for (const day of weekdays) {
-    let plugged = 0
-    for (const row of rows) {
-      if (String(row?.[day] ?? 'out').toLowerCase() === 'in') plugged += 1
-    }
-    counts.set(day, plugged)
-  }
-  const values = [...counts.values()]
-  const uniform = values.every((v) => v === values[0])
-  if (uniform) {
-    const slots = values[0]
-    if (slots === 0) return 'Weekdays: not plugged in'
-    if (slots === 48) return 'Weekdays: plugged in all day'
-    return `Weekdays: plugged in ${slots / 2} h/day (half-hour schedule)`
-  }
-  return 'Custom plug-in schedule (weekday pattern varies)'
 }
 
 export function normalizeBessCommitted(raw) {
@@ -130,10 +93,35 @@ export function normalizeBessCommitted(raw) {
   }
 }
 
+export function normalizeV2gCommitted(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  let capacityMw = raw.capacityMw
+  let durationHours = raw.durationHours
+  if (capacityMw == null || durationHours == null) {
+    const power = Number(raw.maxPowerBessMw)
+    const energy = Number(raw.energyBessMwh)
+    if (Number.isFinite(power) && power > 0 && Number.isFinite(energy) && energy > 0) {
+      capacityMw = power
+      const ratio = energy / power
+      const rounded = Math.round(ratio)
+      durationHours = VALID_DURATIONS.has(rounded)
+        ? rounded
+        : [...VALID_DURATIONS].reduce((best, d) =>
+            Math.abs(d - ratio) < Math.abs(best - ratio) ? d : best,
+          )
+    }
+  }
+  return {
+    ...raw,
+    capacityMw,
+    durationHours,
+  }
+}
+
 /** Build a compact overview for the Results page from study_inputs.json shape. */
 export function buildRunSummaryFromStudy(study, { projectKind = 'ci-bess' } = {}) {
   if (!study || typeof study !== 'object') {
-    return { ok: false, items: [] }
+    return { ok: false, items: [], duos: null, v2gSchedule: null }
   }
 
   const grid = study.gridTariffs ?? {}
@@ -144,20 +132,10 @@ export function buildRunSummaryFromStudy(study, { projectKind = 'ci-bess' } = {}
     grid.importNonEnergy != null && String(grid.importNonEnergy).trim() !== ''
       ? String(grid.importNonEnergy).trim()
       : null
-  const duosRates = formatDuosRates(grid.duos)
-  const duosProfile = summarizeDuosProfile(grid.bandMatrix)
 
   items.push({
     label: 'Import non-energy charge',
     value: importNonEnergy != null ? `${importNonEnergy} £/MWh` : 'Not set',
-  })
-  items.push({
-    label: 'DUoS rates',
-    value: duosRates ?? 'Not set',
-  })
-  items.push({
-    label: 'DUoS time-of-use profile',
-    value: duosProfile,
   })
 
   const pvMw =
@@ -202,28 +180,59 @@ export function buildRunSummaryFromStudy(study, { projectKind = 'ci-bess' } = {}
           : 'Not set',
   })
 
-  if (projectKind === 'v2g' || study.v2gSimulationCommitted) {
-    items.push({
-      label: 'V2G plug-in schedule',
-      value: summarizeV2gSchedule(study.v2gSchedule) ?? 'Not set',
-    })
-  }
-
   const bess = normalizeBessCommitted(study.bessSimulationCommitted)
   if (bess && projectKind !== 'v2g') {
     items.push({
-      label: 'BESS power / energy',
+      label: 'Battery capacity / duration',
       value: `${bess.capacityMw ?? '—'} MW · ${bess.durationHours ?? '—'} h`,
     })
     if (bess.chargingEfficiencyPct != null || bess.dischargingEfficiencyPct != null) {
       items.push({
-        label: 'BESS charge / discharge efficiency',
+        label: 'Charge / discharge efficiency',
         value: `${bess.chargingEfficiencyPct ?? '—'}% / ${bess.dischargingEfficiencyPct ?? '—'}%`,
       })
     }
   }
 
-  return { ok: true, items }
+  let v2gBattery = null
+  if (projectKind === 'v2g' || study.v2gSimulationCommitted) {
+    v2gBattery = normalizeV2gCommitted(study.v2gSimulationCommitted)
+    if (v2gBattery) {
+      items.push({
+        label: 'Battery capacity / duration',
+        value: `${v2gBattery.capacityMw ?? '—'} MW · ${v2gBattery.durationHours ?? '—'} h`,
+      })
+      items.push({
+        label: 'Charge / discharge efficiency',
+        value: `${v2gBattery.chargingEfficiencyPct ?? '—'}% / ${v2gBattery.dischargingEfficiencyPct ?? '—'}%`,
+      })
+      items.push({
+        label: 'Return / target SoC',
+        value: `${v2gBattery.returnSocPct ?? '—'}% / ${v2gBattery.targetSocPct ?? '—'}%`,
+      })
+      items.push({
+        label: 'SOC lower / upper limit',
+        value: `${v2gBattery.socLowerPct ?? '—'}% / ${v2gBattery.socUpperPct ?? '—'}%`,
+      })
+    }
+  }
+
+  const duos =
+    grid.duos || grid.bandMatrix
+      ? {
+          importNonEnergy,
+          rates: grid.duos ?? {},
+          bandMatrix: Array.isArray(grid.bandMatrix) ? grid.bandMatrix : null,
+          profileSummary: summarizeDuosProfile(grid.bandMatrix),
+        }
+      : null
+
+  const v2gSchedule =
+    (projectKind === 'v2g' || study.v2gSimulationCommitted) && study.v2gSchedule
+      ? study.v2gSchedule
+      : null
+
+  return { ok: true, items, duos, v2gSchedule, v2gBattery }
 }
 
 export function readStudyInputsForRunSummary(paths) {

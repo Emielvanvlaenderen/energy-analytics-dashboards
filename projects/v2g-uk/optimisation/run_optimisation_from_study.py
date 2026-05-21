@@ -46,12 +46,17 @@ def main() -> int:
     results_dir.mkdir(parents=True, exist_ok=True)
 
     v2g = ctx.v2g
+    if "capacityMw" in v2g and "durationHours" in v2g:
+        cap_mw = float(v2g["capacityMw"])
+        dur_h = int(v2g["durationHours"])
+        battery_parts = [f"{int(cap_mw)}MW", f"{dur_h}h"]
+    else:
+        battery_parts = [f"{v2g['energyBessMwh']}MWh", f"{v2g['maxPowerBessMw']}MW"]
     stem_parts = [
         "v2g_wholesale",
         _slug(v2g["startDate"]),
         _slug(v2g["endDate"]),
-        f"{v2g['energyBessMwh']}MWh",
-        f"{v2g['maxPowerBessMw']}MW",
+        *battery_parts,
         f"ret{int(float(v2g['returnSocPct']))}",
         f"tgt{int(float(v2g['targetSocPct']))}",
         "v2g" if ctx.params.allow_v2g_discharge else "smart",

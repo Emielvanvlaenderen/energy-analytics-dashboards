@@ -9,6 +9,7 @@ import { projectFetch } from './lib/api'
 import { useProjectApi } from './useProjectApi'
 import { emptyMatrix } from './BandMatrix'
 import { defaultV2gSchedule, normalizeV2gSchedule } from './v2gSchedule'
+import { v2gBatteryFromCommitted } from './lib/v2gBatteryFields'
 
 const StudyInputsContext = createContext(null)
 
@@ -89,8 +90,8 @@ export function StudyInputsProvider({ children }) {
   const [v2gSimulationInputs, setV2gSimulationInputs] = useState({
     startDate: '',
     endDate: '',
-    energyBessMwh: '',
-    maxPowerBessMw: '',
+    capacityMw: '',
+    durationHours: 2,
     socLowerPct: 20,
     socUpperPct: 90,
     returnSocPct: 30,
@@ -164,12 +165,13 @@ export function StudyInputsProvider({ children }) {
 
         if (s.v2gSimulationCommitted && typeof s.v2gSimulationCommitted === 'object') {
           const v = s.v2gSimulationCommitted
+          const battery = v2gBatteryFromCommitted(v)
           setV2gSimulationCommitted(v)
           setV2gSimulationInputs({
             startDate: v.startDate ?? '',
             endDate: v.endDate ?? '',
-            energyBessMwh: v.energyBessMwh ?? '',
-            maxPowerBessMw: v.maxPowerBessMw ?? '',
+            capacityMw: battery.capacityMw ?? '',
+            durationHours: battery.durationHours ?? 2,
             socLowerPct: v.socLowerPct ?? 20,
             socUpperPct: v.socUpperPct ?? 90,
             returnSocPct: v.returnSocPct ?? 30,

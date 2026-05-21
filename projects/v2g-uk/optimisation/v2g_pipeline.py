@@ -108,6 +108,14 @@ def band_matrix_long(study: dict) -> pd.DataFrame:
     return pd.DataFrame(long_rows)
 
 
+def _v2g_battery_mwh_mw(v2g: dict) -> tuple[float, float]:
+    if "capacityMw" in v2g and "durationHours" in v2g:
+        cap = float(v2g["capacityMw"])
+        dur = int(v2g["durationHours"])
+        return cap * dur, cap
+    return float(v2g["energyBessMwh"]), float(v2g["maxPowerBessMw"])
+
+
 def load_context(study_path: Path) -> V2gContext:
     with open(study_path, encoding="utf-8") as f:
         study = json.load(f)
@@ -117,9 +125,11 @@ def load_context(study_path: Path) -> V2gContext:
     sim_type = str(v2g.get("simulationType", "V2G")).lower()
     allow_v2g = "smart" not in sim_type
 
+    energy_bess, max_power_bess = _v2g_battery_mwh_mw(v2g)
+
     params = V2gMilpParams(
-        energy_bess=float(v2g["energyBessMwh"]),
-        max_power_bess=float(v2g["maxPowerBessMw"]),
+        energy_bess=energy_bess,
+        max_power_bess=max_power_bess,
         allow_v2g_discharge=allow_v2g,
         min_soc=_parse_pct(v2g["socLowerPct"], 0.2),
         max_soc=_parse_pct(v2g["socUpperPct"], 0.9),

@@ -24,8 +24,6 @@ function validateV2gCommitted(v) {
   const keys = [
     'startDate',
     'endDate',
-    'energyBessMwh',
-    'maxPowerBessMw',
     'socLowerPct',
     'socUpperPct',
     'targetSocPct',
@@ -36,6 +34,19 @@ function validateV2gCommitted(v) {
   ]
   for (const k of keys) {
     if (typeof v[k] === 'undefined') return `Missing v2gSimulationCommitted.${k}`
+  }
+  const hasCapacity =
+    typeof v.capacityMw !== 'undefined' && typeof v.durationHours !== 'undefined'
+  const hasLegacy =
+    typeof v.energyBessMwh !== 'undefined' && typeof v.maxPowerBessMw !== 'undefined'
+  if (!hasCapacity && !hasLegacy) {
+    return 'Missing v2gSimulationCommitted battery capacity/duration or energy/power'
+  }
+  if (hasCapacity) {
+    const dh = Number(v.durationHours)
+    if (![2, 3, 4, 6, 8].includes(dh)) {
+      return 'v2gSimulationCommitted.durationHours must be 2, 3, 4, 6, or 8'
+    }
   }
   return null
 }

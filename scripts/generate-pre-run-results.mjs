@@ -70,7 +70,9 @@ const SHARED = {
   v2gSimulationCommitted: {
     startDate: '2024-01-01',
     endDate: '2026-05-01',
-    energyBessMwh: 60,
+    capacityMw: 7,
+    durationHours: 8,
+    energyBessMwh: 56,
     maxPowerBessMw: 7,
     socLowerPct: 20,
     socUpperPct: 90,
