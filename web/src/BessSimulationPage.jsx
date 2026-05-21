@@ -10,6 +10,8 @@ import { useProjectApi } from './useProjectApi'
 import { useSolutionPaths } from './useSolutionPaths'
 
 import { BESS_DURATIONS } from './lib/bessDurations'
+
+function parseIntOrEmpty(raw) {
   if (raw === '' || raw === '-' || raw === '.') return ''
   const n = Number.parseInt(String(raw), 10)
   return Number.isFinite(n) ? n : ''
