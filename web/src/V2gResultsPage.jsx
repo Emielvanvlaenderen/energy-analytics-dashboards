@@ -3,11 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactEcharts from 'echarts-for-react'
 import { BRAND, BRAND_ACCENT } from './brand'
 import {
-  buildSavedSimulationName,
   formatRunOptionLabel,
   formatSimulationGroupOption,
   groupSimulationsByName,
+  simulationNameForSave,
 } from './simulationFilename'
+import { ResultsParameterOverview } from './ResultsParameterOverview'
 import { formatApiError } from './lib/api'
 import {
   fetchResultsPayload,
@@ -501,13 +502,7 @@ export function V2gResultsPage() {
     const meta = selectedRunKey
       ? findSimulationByRunKey(simulations, selectedRunKey)
       : null
-    if (!meta) return ''
-    if (meta.isSaved) return meta.simulationName || meta.parametersDisplay || ''
-    return buildSavedSimulationName(
-      meta.simulationName,
-      meta.parametersDisplay,
-      meta.parametersLabel,
-    )
+    return simulationNameForSave(meta)
   }, [simulations, selectedRunKey])
 
   const socOption = useMemo(
@@ -652,6 +647,8 @@ export function V2gResultsPage() {
 
       {chartsReady ? (
         <>
+          <ResultsParameterOverview runSummary={payload?.runSummary} />
+
           <section
             className="panel inputs-panel results-panel results-page__subsection"
             aria-labelledby="v2g-results-timeseries-heading"
@@ -762,6 +759,7 @@ export function V2gResultsPage() {
         simulations={simulations}
         saveLabel={saveLabel}
         onSaved={() => setListVersion((v) => v + 1)}
+        onDeleted={() => setListVersion((v) => v + 1)}
       />
     </div>
   )

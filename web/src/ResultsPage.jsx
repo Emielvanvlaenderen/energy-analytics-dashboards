@@ -4,11 +4,12 @@ import ReactEcharts from 'echarts-for-react'
 
 import { BRAND, BRAND_ACCENT } from './brand'
 import {
-  buildSavedSimulationName,
   formatRunOptionLabel,
   formatSimulationGroupOption,
   groupSimulationsByName,
+  simulationNameForSave,
 } from './simulationFilename'
+import { ResultsParameterOverview } from './ResultsParameterOverview'
 import { formatApiError } from './lib/api'
 import {
   fetchResultsPayload,
@@ -832,13 +833,7 @@ export function ResultsPage() {
     const meta = selectedRunKey
       ? findSimulationByRunKey(simulations, selectedRunKey)
       : null
-    if (!meta) return ''
-    if (meta.isSaved) return meta.simulationName || meta.parametersDisplay || ''
-    return buildSavedSimulationName(
-      meta.simulationName,
-      meta.parametersDisplay,
-      meta.parametersLabel,
-    )
+    return simulationNameForSave(meta)
   }, [simulations, selectedRunKey])
 
   function handleSimulationNameChange(name) {
@@ -910,6 +905,8 @@ export function ResultsPage() {
 
       {chartsReady ? (
         <>
+          <ResultsParameterOverview runSummary={payload?.runSummary} />
+
           <section
             className="panel inputs-panel results-panel results-page__subsection"
             aria-labelledby="results-timeseries-heading"
@@ -1040,6 +1037,7 @@ export function ResultsPage() {
         simulations={simulations}
         saveLabel={saveLabel}
         onSaved={() => setListVersion((v) => v + 1)}
+        onDeleted={() => setListVersion((v) => v + 1)}
       />
     </div>
   )

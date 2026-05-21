@@ -121,8 +121,9 @@ export function createProjectApiRouter() {
       }
       const text = dl.buffer.toString('utf8')
       const label = `saved:${savedId}`
+      const projectKind = req.paths?.projectKind === 'v2g' ? 'v2g' : 'ci-bess'
       const result =
-        req.paths?.projectKind === 'v2g'
+        projectKind === 'v2g'
           ? (await import('./v2gResultsCore.mjs')).parseV2gResultsFromCsvText(
               text,
               label,
@@ -134,7 +135,9 @@ export function createProjectApiRouter() {
       if (!result.ok) {
         return res.status(result.status).json({ ok: false, error: result.error })
       }
-      return res.json(result)
+      const { buildRunSummaryFromStudy } = await import('./runSummaryCore.mjs')
+      const runSummary = buildRunSummaryFromStudy(dl.studyInputs, { projectKind })
+      return res.json({ ...result, runSummary })
     }
 
     const resultPaths = { paths: resolveResultsPaths(req) }
@@ -151,6 +154,7 @@ export function createProjectApiRouter() {
       rowCount: result.rowCount,
       monthlyAdded: result.monthlyAdded,
       series: result.series,
+      runSummary: result.runSummary ?? null,
     })
   })
 

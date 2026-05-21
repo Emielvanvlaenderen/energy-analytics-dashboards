@@ -7,12 +7,16 @@ create table if not exists public.saved_simulations (
   user_id uuid not null references auth.users (id) on delete cascade,
   project_id text not null,
   name text not null,
+  simulation_name text,
   results_filename text not null,
   storage_path text not null,
   study_inputs jsonb,
-  created_at timestamptz not null default now(),
-  constraint saved_simulations_user_project_name unique (user_id, project_id, name)
+  created_at timestamptz not null default now()
 );
+
+-- One row per saved CSV file (multiple runs may share simulation_name).
+create unique index if not exists saved_simulations_user_project_file_idx
+  on public.saved_simulations (user_id, project_id, results_filename);
 
 create index if not exists saved_simulations_user_project_idx
   on public.saved_simulations (user_id, project_id, created_at desc);

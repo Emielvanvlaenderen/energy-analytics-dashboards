@@ -1,6 +1,10 @@
 import fs from 'fs'
 import path from 'path'
 import {
+  buildRunSummaryFromStudy,
+  readStudyInputsForRunSummary,
+} from './runSummaryCore.mjs'
+import {
   formatParametersLabel,
   groupSimulationsByName,
   parseSimulationFilename,
@@ -118,11 +122,17 @@ export async function executeListBessSimulations(
 
     let activeSavedId = null
     if (userId) {
-      const { executeListSavedSimulations, mapSavedRowToSimulation } =
-        await import('./savedSimulationsCore.mjs')
+      const {
+        executeListSavedSimulations,
+        executeRepairSavedSimulationNames,
+        mapSavedRowToSimulation,
+      } = await import('./savedSimulationsCore.mjs')
+      await executeRepairSavedSimulationNames(projectId, userId)
       const saved = await executeListSavedSimulations(projectId, userId)
       if (saved.ok && saved.simulations?.length) {
-        const savedRuns = saved.simulations.map(mapSavedRowToSimulation)
+        const savedRuns = saved.simulations.map((row) =>
+          mapSavedRowToSimulation(row, siteForm),
+        )
         simulations = [...savedRuns, ...simulations]
         const onlyPreRun =
           stats.length > 0 && stats.every((s) => s.isPreRun)
@@ -307,7 +317,11 @@ export function executeGetBessResults(projectId, query = {}, { paths: pathsIn } 
       return { ok: false, status: 404, error: 'No results file resolved.' }
     }
     const text = fs.readFileSync(csvPath, 'utf8')
-    return parseBessResultsFromCsvText(text, csvPath)
+    const parsed = parseBessResultsFromCsvText(text, csvPath)
+    if (!parsed.ok) return parsed
+    const study = readStudyInputsForRunSummary(paths)
+    const runSummary = buildRunSummaryFromStudy(study, { projectKind: 'ci-bess' })
+    return { ...parsed, runSummary }
   } catch (e) {
     console.error(e)
     return {

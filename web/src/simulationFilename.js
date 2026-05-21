@@ -38,6 +38,14 @@ export function formatSimulationGroupOption(group) {
   return group.simulationName.replace(/_/g, ' ')
 }
 
+/** Simulation name only (parameters live on the run picker). */
+export function simulationNameForSave(meta) {
+  if (!meta) return ''
+  const name = meta.simulationName ?? ''
+  if (meta.isPreRun || name === 'Pre-run_demo') return 'Pre-run (demo)'
+  return name === '(unnamed)' ? '' : name.replace(/_/g, ' ')
+}
+
 /** Account save label: simulation name + run parameters (max 64 chars). */
 export function buildSavedSimulationName(
   simulationName,

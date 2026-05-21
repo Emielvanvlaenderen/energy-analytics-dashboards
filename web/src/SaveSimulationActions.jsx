@@ -17,19 +17,23 @@ export function SaveSimulationActions({
   simulations,
   saveLabel,
   onSaved,
+  onDeleted,
 }) {
   const { user, accessToken, signInWithGitHub, supabaseConfigured } = useAuth()
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [message, setMessage] = useState(null)
-  const [messageKind, setMessageKind] = useState('error')
+  const [messageKind, setMessageKind] = useState(null)
 
   const selectedMeta = selectedRunKey
     ? findSimulationByRunKey(simulations, selectedRunKey)
     : null
   const selectedFile = selectedMeta?.filename ?? null
+  const selectedSavedId = selectedMeta?.savedId ?? null
   const alreadySaved = Boolean(selectedMeta?.isSaved)
   const canSave = Boolean(saveLabel?.trim() && selectedFile && !alreadySaved)
+  const canDelete = Boolean(user && alreadySaved && selectedSavedId)
 
   async function resolveAccessToken() {
     if (supabase) {
@@ -53,6 +57,7 @@ export function SaveSimulationActions({
     }
     setDownloading(true)
     setMessage(null)
+    setMessageKind(null)
     try {
       const q = new URLSearchParams({ file: selectedFile })
       const guestId = readStoredGuestId()
@@ -101,6 +106,7 @@ export function SaveSimulationActions({
     }
     setSaving(true)
     setMessage(null)
+    setMessageKind(null)
     try {
       const token = await resolveAccessToken()
       if (!token) {
@@ -149,6 +155,42 @@ export function SaveSimulationActions({
     }
   }
 
+  async function deleteFromAccount() {
+    if (!canDelete) return
+    setDeleting(true)
+    setMessage(null)
+    setMessageKind(null)
+    try {
+      const token = await resolveAccessToken()
+      if (!token) {
+        setMessageKind('error')
+        setMessage('Session expired. Sign out, then sign in with GitHub again.')
+        return
+      }
+      const res = await projectFetch(
+        `${apiBase}/saved-simulations/${encodeURIComponent(selectedSavedId)}`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
+      const { data } = await parseApiResponse(res)
+      if (!res.ok || !data.ok) {
+        setMessageKind('error')
+        setMessage(formatApiError(res, data, 'Could not delete saved run.'))
+        return
+      }
+      setMessageKind('success')
+      setMessage('Removed from your account.')
+      onDeleted?.()
+    } catch (e) {
+      setMessageKind('error')
+      setMessage(e instanceof Error ? e.message : 'Could not delete saved run.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <section
       className="panel inputs-panel results-page__export"
@@ -164,28 +206,40 @@ export function SaveSimulationActions({
           {downloading ? 'Downloading…' : 'Download CSV'}
         </button>
         {supabaseConfigured ? (
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={saving || (user ? !canSave && !alreadySaved : false)}
-            onClick={saveToAccount}
-          >
-            {saving
-              ? 'Saving…'
-              : user
-                ? alreadySaved
-                  ? 'Saved to my account'
-                  : 'Save to my account'
-                : 'Sign in with GitHub to save'}
-          </button>
+          <>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={saving || (user ? !canSave && !alreadySaved : false)}
+              onClick={saveToAccount}
+            >
+              {saving
+                ? 'Saving…'
+                : user
+                  ? alreadySaved
+                    ? 'Saved to my account'
+                    : 'Save to my account'
+                  : 'Sign in with GitHub to save'}
+            </button>
+            {canDelete ? (
+              <button
+                type="button"
+                className="btn btn--secondary"
+                disabled={deleting}
+                onClick={deleteFromAccount}
+              >
+                {deleting ? 'Deleting…' : 'Delete from my account'}
+              </button>
+            ) : null}
+          </>
         ) : null}
       </div>
       {message ? (
         <p
           className={
             messageKind === 'success'
-              ? 'continue-section__success'
-              : 'continue-section__error'
+              ? 'results-page__status results-page__status--success'
+              : 'results-page__status results-page__status--error'
           }
           role="status"
         >

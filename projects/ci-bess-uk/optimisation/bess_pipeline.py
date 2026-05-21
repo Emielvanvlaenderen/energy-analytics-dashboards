@@ -64,9 +64,13 @@ def load_context(study_path: Path) -> BessContext:
     cap_mw = float(bess["capacityMw"])
     dur_h = int(bess["durationHours"])
     total_capacity_mwh = cap_mw * dur_h
-    rte = float(bess["roundtripEfficiencyPct"]) / 100.0
-    ce = np.sqrt(rte)
-    de = np.sqrt(rte)
+    if "chargingEfficiencyPct" in bess and "dischargingEfficiencyPct" in bess:
+        ce = float(bess["chargingEfficiencyPct"]) / 100.0
+        de = float(bess["dischargingEfficiencyPct"]) / 100.0
+    else:
+        rte = float(bess["roundtripEfficiencyPct"]) / 100.0
+        ce = np.sqrt(rte)
+        de = np.sqrt(rte)
 
     mi = limits.get("maxImportMw")
     me = limits.get("maxExportMw")

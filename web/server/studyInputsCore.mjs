@@ -47,13 +47,23 @@ function validateBessCommitted(b) {
     'endDate',
     'capacityMw',
     'durationHours',
-    'roundtripEfficiencyPct',
     'socLowerPct',
     'socUpperPct',
     'cyclesPerDayTarget',
   ]
   for (const k of keys) {
     if (typeof b[k] === 'undefined') return `Missing bessSimulationCommitted.${k}`
+  }
+  const hasSplit =
+    typeof b.chargingEfficiencyPct !== 'undefined' &&
+    typeof b.dischargingEfficiencyPct !== 'undefined'
+  const hasRoundtrip = typeof b.roundtripEfficiencyPct !== 'undefined'
+  if (!hasSplit && !hasRoundtrip) {
+    return 'Missing bessSimulationCommitted charging/discharging efficiency'
+  }
+  const dh = Number(b.durationHours)
+  if (![2, 3, 4, 6, 8].includes(dh)) {
+    return 'bessSimulationCommitted.durationHours must be 2, 3, 4, 6, or 8'
   }
   return null
 }

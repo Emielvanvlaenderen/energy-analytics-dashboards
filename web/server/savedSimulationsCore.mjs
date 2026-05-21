@@ -3,9 +3,9 @@ import fs from 'fs'
 import { executeDownloadResults } from './bessResultsCore.mjs'
 import { getSupabaseAdmin, isSupabaseConfigured } from './authCore.mjs'
 import {
-  buildSavedSimulationName,
   formatParametersLabel,
   parseSimulationFilename,
+  slugSimulationName,
 } from './simulationFilename.mjs'
 import {
   buildParametersDisplay,
@@ -15,20 +15,50 @@ import {
 
 const BUCKET = 'simulation-results'
 
+function displaySimulationName(raw) {
+  if (!raw) return '(unnamed)'
+  return String(raw).replace(/_/g, ' ')
+}
+
+/** Resolve simulation name from DB row (handles legacy combined labels). */
+export function resolveSavedSimulationName(row) {
+  if (row.simulation_name?.trim()) {
+    return displaySimulationName(row.simulation_name.trim())
+  }
+  const parsed = parseSimulationFilename(row.results_filename || '')
+  if (parsed.simulationName && parsed.simulationName !== '(unnamed)') {
+    return displaySimulationName(parsed.simulationName)
+  }
+  const legacy = String(row.name || '').trim()
+  if (legacy.includes(' — ')) {
+    return legacy.split(' — ')[0].trim()
+  }
+  return legacy ? displaySimulationName(legacy) : 'Saved run'
+}
+
 /** Map Supabase row → results picker entry (same shape as workspace CSV list). */
-export function mapSavedRowToSimulation(row) {
+export function mapSavedRowToSimulation(row, siteForm = null) {
+  const parsed = parseSimulationFilename(row.results_filename || '')
+  const simulationName = resolveSavedSimulationName(row)
+  const parametersLabel = parsed.parametersLabel
+  const siteDataFlags = resolveSiteDataFlags(parametersLabel, siteForm)
+
   return {
     savedId: row.id,
     filename: row.results_filename,
-    simulationName: row.name,
-    parametersLabel: row.name,
-    parametersDisplay: row.name,
+    simulationName,
+    parametersLabel,
+    parametersDisplay: buildParametersDisplay(
+      parametersLabel,
+      siteDataFlags,
+      formatParametersLabel,
+    ),
     mtimeMs: new Date(row.created_at).getTime(),
     isSaved: true,
-    isLegacy: false,
+    isLegacy: parsed.isLegacy,
     isPreRun: false,
     siteDataLabel: '',
-    siteDataFlags: {},
+    siteDataFlags,
   }
 }
 
@@ -43,15 +73,35 @@ export async function executeListSavedSimulations(projectId, userId) {
   const admin = getSupabaseAdmin()
   const { data, error } = await admin
     .from('saved_simulations')
-    .select('id, name, project_id, results_filename, created_at')
+    .select('id, name, simulation_name, project_id, results_filename, created_at')
     .eq('user_id', userId)
     .eq('project_id', projectId)
     .order('created_at', { ascending: false })
 
   if (error) {
+    if (error.message?.includes('simulation_name')) {
+      const fallback = await admin
+        .from('saved_simulations')
+        .select('id, name, project_id, results_filename, created_at')
+        .eq('user_id', userId)
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+      if (fallback.error) {
+        return { ok: false, status: 500, error: fallback.error.message }
+      }
+      return { ok: true, status: 200, simulations: fallback.data ?? [] }
+    }
     return { ok: false, status: 500, error: error.message }
   }
   return { ok: true, status: 200, simulations: data ?? [] }
+}
+
+function normalizeSaveSimulationName(raw) {
+  const trimmed = String(raw || '').trim().slice(0, 64)
+  if (!trimmed) return null
+  const slug = slugSimulationName(trimmed)
+  if (!slug) return null
+  return trimmed
 }
 
 export async function executeSaveCurrentSimulation(
@@ -74,27 +124,15 @@ export async function executeSaveCurrentSimulation(
     return { ok: false, status: dl.status, error: dl.error }
   }
 
-  let name =
-    typeof body?.name === 'string' && body.name.trim()
-      ? body.name.trim().slice(0, 64)
-      : null
-  if (!name) {
+  let simulationName = normalizeSaveSimulationName(body?.name)
+  if (!simulationName) {
     const parsed = parseSimulationFilename(dl.filename)
-    const siteForm = readSiteDataForm(paths)
-    const flags = resolveSiteDataFlags(parsed.parametersLabel, siteForm)
-    const parametersDisplay = buildParametersDisplay(
-      parsed.parametersLabel,
-      flags,
-      formatParametersLabel,
-    )
-    name = buildSavedSimulationName(
-      parsed.simulationName,
-      parametersDisplay,
-      parsed.parametersLabel,
-    )
+    if (parsed.simulationName && parsed.simulationName !== '(unnamed)') {
+      simulationName = displaySimulationName(parsed.simulationName)
+    }
   }
-  if (!name) {
-    return { ok: false, status: 400, error: 'Could not derive a name for this run.' }
+  if (!simulationName) {
+    return { ok: false, status: 400, error: 'Enter a simulation name before saving.' }
   }
 
   let study = null
@@ -122,25 +160,40 @@ export async function executeSaveCurrentSimulation(
     return { ok: false, status: 500, error: uploadError.message }
   }
 
-  const { data, error: insertError } = await admin
+  const insertRow = {
+    id,
+    user_id: userId,
+    project_id: projectId,
+    name: simulationName,
+    simulation_name: simulationName,
+    results_filename: dl.filename,
+    storage_path: storagePath,
+    study_inputs: study,
+  }
+
+  let { data, error: insertError } = await admin
     .from('saved_simulations')
-    .insert({
-      id,
-      user_id: userId,
-      project_id: projectId,
-      name,
-      results_filename: dl.filename,
-      storage_path: storagePath,
-      study_inputs: study,
-    })
-    .select('id, name, project_id, results_filename, created_at')
+    .insert(insertRow)
+    .select('id, name, simulation_name, project_id, results_filename, created_at')
     .single()
+
+  if (insertError?.message?.includes('simulation_name')) {
+    const legacyRow = { ...insertRow }
+    delete legacyRow.simulation_name
+    ;({ data, error: insertError } = await admin
+      .from('saved_simulations')
+      .insert(legacyRow)
+      .select('id, name, project_id, results_filename, created_at')
+      .single())
+  }
 
   if (insertError) {
     await admin.storage.from(BUCKET).remove([storagePath])
     const msg = insertError.message.includes('unique')
-      ? 'You already have a saved simulation with this name.'
-      : insertError.message
+      ? 'You already saved this run to your account.'
+      : insertError.message.includes('simulation_name')
+        ? 'Saved simulations need a database update. Run supabase/migrations/002_saved_simulation_name.sql in Supabase, then try again.'
+        : insertError.message
     return { ok: false, status: 400, error: msg }
   }
 
@@ -163,7 +216,7 @@ export async function executeDownloadSavedSimulation(
   const admin = getSupabaseAdmin()
   const { data, error } = await admin
     .from('saved_simulations')
-    .select('storage_path, results_filename, project_id')
+    .select('storage_path, results_filename, project_id, study_inputs')
     .eq('id', simulationId)
     .eq('user_id', userId)
     .eq('project_id', projectId)
@@ -186,6 +239,7 @@ export async function executeDownloadSavedSimulation(
     status: 200,
     buffer: buf,
     filename: data.results_filename || 'results.csv',
+    studyInputs: data.study_inputs ?? null,
   }
 }
 
@@ -218,4 +272,40 @@ export async function executeDeleteSavedSimulation(
 
   if (delError) return { ok: false, status: 500, error: delError.message }
   return { ok: true, status: 200 }
+}
+
+/** Repair legacy rows where name stored the full label (optional, idempotent). */
+export async function executeRepairSavedSimulationNames(projectId, userId) {
+  if (!isSupabaseConfigured()) return { ok: true, repaired: 0 }
+  const admin = getSupabaseAdmin()
+  const { data, error } = await admin
+    .from('saved_simulations')
+    .select('id, name, simulation_name, results_filename')
+    .eq('user_id', userId)
+    .eq('project_id', projectId)
+
+  if (error) {
+    if (error.message?.includes('simulation_name')) {
+      return { ok: true, repaired: 0 }
+    }
+    return { ok: false, repaired: 0, error: error.message }
+  }
+
+  if (!data?.length) return { ok: true, repaired: 0 }
+
+  let repaired = 0
+  for (const row of data) {
+    const needsFix =
+      !row.simulation_name ||
+      row.name.includes(' — ') ||
+      row.name !== resolveSavedSimulationName(row)
+    if (!needsFix) continue
+    const simulationName = resolveSavedSimulationName(row)
+    const { error: upErr } = await admin
+      .from('saved_simulations')
+      .update({ name: simulationName, simulation_name: simulationName })
+      .eq('id', row.id)
+    if (!upErr) repaired += 1
+  }
+  return { ok: true, repaired }
 }

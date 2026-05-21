@@ -9,6 +9,8 @@ import { buildStudySnapshot } from './lib/studySnapshot'
 import { useProjectApi } from './useProjectApi'
 import { useSolutionPaths } from './useSolutionPaths'
 
+const BESS_DURATIONS = [2, 3, 4, 6, 8]
+
 function parseIntOrEmpty(raw) {
   if (raw === '' || raw === '-' || raw === '.') return ''
   const n = Number.parseInt(String(raw), 10)
@@ -19,6 +21,10 @@ function parseFloatOrEmpty(raw) {
   if (raw === '' || raw === '-' || raw === '.') return ''
   const n = Number.parseFloat(raw)
   return Number.isFinite(n) ? n : ''
+}
+
+function readPct(raw) {
+  return typeof raw === 'number' ? raw : Number.parseFloat(String(raw))
 }
 
 /** @returns {string | null} error message or null if valid */
@@ -39,40 +45,32 @@ function validateBessForCommit(b) {
   }
 
   const dh = Number(b.durationHours)
-  if (dh !== 2 && dh !== 4) {
-    return 'BESS duration must be 2 h or 4 h.'
+  if (!BESS_DURATIONS.includes(dh)) {
+    return 'BESS duration must be 2, 3, 4, 6, or 8 hours.'
   }
 
-  const rte =
-    typeof b.roundtripEfficiency === 'number'
-      ? b.roundtripEfficiency
-      : Number.parseFloat(String(b.roundtripEfficiency))
-  if (!Number.isFinite(rte) || rte < 0 || rte > 100) {
-    return 'Roundtrip efficiency must be between 0 and 100 (%).'
+  const ce = readPct(b.chargingEfficiencyPct)
+  const de = readPct(b.dischargingEfficiencyPct)
+  if (!Number.isFinite(ce) || ce < 0 || ce > 100) {
+    return 'Charging efficiency must be between 0 and 100 (%).'
+  }
+  if (!Number.isFinite(de) || de < 0 || de > 100) {
+    return 'Discharging efficiency must be between 0 and 100 (%).'
   }
 
-  const slo =
-    typeof b.socLowerPct === 'number'
-      ? b.socLowerPct
-      : Number.parseFloat(String(b.socLowerPct))
-  const sup =
-    typeof b.socUpperPct === 'number'
-      ? b.socUpperPct
-      : Number.parseFloat(String(b.socUpperPct))
+  const slo = readPct(b.socLowerPct)
+  const sup = readPct(b.socUpperPct)
   if (!Number.isFinite(slo) || slo < 0 || slo > 100) {
-    return 'SoC lower limit must be between 0 and 100 (%).'
+    return 'SOC lower limit must be between 0 and 100 (%).'
   }
   if (!Number.isFinite(sup) || sup < 0 || sup > 100) {
-    return 'SoC upper limit must be between 0 and 100 (%).'
+    return 'SOC upper limit must be between 0 and 100 (%).'
   }
   if (slo >= sup) {
-    return 'SoC lower limit must be less than the upper limit.'
+    return 'SOC lower limit must be less than the upper limit.'
   }
 
-  const cyc =
-    typeof b.cyclesPerDayTarget === 'number'
-      ? b.cyclesPerDayTarget
-      : Number.parseFloat(String(b.cyclesPerDayTarget))
+  const cyc = readPct(b.cyclesPerDayTarget)
   if (!Number.isFinite(cyc) || cyc < 0) {
     return 'Cycles per day target must be zero or positive.'
   }
@@ -135,18 +133,22 @@ export function BessSimulationPage() {
     }
 
     const cap = Number.parseInt(String(b.capacityMw), 10)
-    const rte = Number.parseFloat(String(b.roundtripEfficiency))
-    const slo = Number.parseFloat(String(b.socLowerPct))
-    const sup = Number.parseFloat(String(b.socUpperPct))
-    const cyc = Number.parseFloat(String(b.cyclesPerDayTarget))
-    const dh = b.durationHours === 4 ? 4 : 2
+    const ce = readPct(b.chargingEfficiencyPct)
+    const de = readPct(b.dischargingEfficiencyPct)
+    const slo = readPct(b.socLowerPct)
+    const sup = readPct(b.socUpperPct)
+    const cyc = readPct(b.cyclesPerDayTarget)
+    const dh = BESS_DURATIONS.includes(Number(b.durationHours))
+      ? Number(b.durationHours)
+      : 2
 
     setPendingCommitted({
       startDate: b.startDate,
       endDate: b.endDate,
       capacityMw: cap,
       durationHours: dh,
-      roundtripEfficiencyPct: rte,
+      chargingEfficiencyPct: ce,
+      dischargingEfficiencyPct: de,
       socLowerPct: slo,
       socUpperPct: sup,
       cyclesPerDayTarget: cyc,
@@ -291,7 +293,7 @@ export function BessSimulationPage() {
           <div className="bess-form__row">
             <label className="field field--stacked">
               <span className="field__label">
-                BESS capacity <span className="field__unit">(MW)</span>
+                Battery capacity <span className="field__unit">(MW)</span>
               </span>
               <input
                 className="field__input field__input--sm"
@@ -309,7 +311,7 @@ export function BessSimulationPage() {
 
             <label className="field field--stacked">
               <span className="field__label">
-                BESS duration <span className="field__unit">(h)</span>
+                Duration <span className="field__unit">(h)</span>
               </span>
               <select
                 className="field__input field__input--sm"
@@ -318,37 +320,62 @@ export function BessSimulationPage() {
                   patchBess({ durationHours: Number(e.target.value) })
                 }
               >
-                <option value={2}>2</option>
-                <option value={4}>4</option>
+                {BESS_DURATIONS.map((h) => (
+                  <option key={h} value={h}>
+                    {h} h
+                  </option>
+                ))}
               </select>
             </label>
           </div>
 
-          <label className="field field--stacked field--full">
-            <span className="field__label">
-              Roundtrip efficiency <span className="field__unit">(%)</span>
-            </span>
-            <input
-              className="field__input field__input--sm"
-              type="number"
-              inputMode="decimal"
-              step="any"
-              min={0}
-              max={100}
-              placeholder="e.g. 87"
-              value={b.roundtripEfficiency}
-              onChange={(e) =>
-                patchBess({
-                  roundtripEfficiency: parseFloatOrEmpty(e.target.value),
-                })
-              }
-            />
-          </label>
+          <div className="bess-form__row">
+            <label className="field field--stacked">
+              <span className="field__label">
+                Charging efficiency <span className="field__unit">(%)</span>
+              </span>
+              <input
+                className="field__input field__input--sm"
+                type="number"
+                inputMode="decimal"
+                step="any"
+                min={0}
+                max={100}
+                placeholder="0–100"
+                value={b.chargingEfficiencyPct}
+                onChange={(e) =>
+                  patchBess({
+                    chargingEfficiencyPct: parseFloatOrEmpty(e.target.value),
+                  })
+                }
+              />
+            </label>
+            <label className="field field--stacked">
+              <span className="field__label">
+                Discharging efficiency <span className="field__unit">(%)</span>
+              </span>
+              <input
+                className="field__input field__input--sm"
+                type="number"
+                inputMode="decimal"
+                step="any"
+                min={0}
+                max={100}
+                placeholder="0–100"
+                value={b.dischargingEfficiencyPct}
+                onChange={(e) =>
+                  patchBess({
+                    dischargingEfficiencyPct: parseFloatOrEmpty(e.target.value),
+                  })
+                }
+              />
+            </label>
+          </div>
 
           <div className="bess-form__row">
             <label className="field field--stacked">
               <span className="field__label">
-                SoC lower limit <span className="field__unit">(%)</span>
+                SOC lower limit <span className="field__unit">(%)</span>
               </span>
               <input
                 className="field__input field__input--sm"
@@ -366,7 +393,7 @@ export function BessSimulationPage() {
             </label>
             <label className="field field--stacked">
               <span className="field__label">
-                SoC upper limit <span className="field__unit">(%)</span>
+                SOC upper limit <span className="field__unit">(%)</span>
               </span>
               <input
                 className="field__input field__input--sm"

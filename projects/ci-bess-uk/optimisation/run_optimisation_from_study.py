@@ -74,12 +74,20 @@ def main() -> int:
         _slug(bess["endDate"]),
         f"{int(cap_mw)}MW",
         f"{dur_h}h",
-        f"rte{int(bess['roundtripEfficiencyPct'])}",
+    ]
+    if "chargingEfficiencyPct" in bess and "dischargingEfficiencyPct" in bess:
+        stem_parts.extend([
+            f"ce{int(float(bess['chargingEfficiencyPct']))}",
+            f"de{int(float(bess['dischargingEfficiencyPct']))}",
+        ])
+    else:
+        stem_parts.append(f"rte{int(bess['roundtripEfficiencyPct'])}")
+    stem_parts.extend([
         f"soc{int(bess['socLowerPct'])}_{int(bess['socUpperPct'])}",
         "cyc" + _slug(str(bess["cyclesPerDayTarget"])),
         f"pmax{_slug(f'{ctx.max_abs_power_charge_mw:.4f}')}MW",
         f"e{_slug(f'{ctx.total_capacity_mwh:.2f}')}MWh",
-    ]
+    ])
     if not simulation_name:
         print(
             "Simulation name is required. Enter a name when you run Simulate BESS.",

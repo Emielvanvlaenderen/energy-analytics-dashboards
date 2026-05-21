@@ -72,7 +72,8 @@ export function StudyInputsProvider({ children }) {
     endDate: '',
     capacityMw: '',
     durationHours: 2,
-    roundtripEfficiency: '',
+    chargingEfficiencyPct: '',
+    dischargingEfficiencyPct: '',
     socLowerPct: '',
     socUpperPct: '',
     cyclesPerDayTarget: '',
@@ -133,13 +134,24 @@ export function StudyInputsProvider({ children }) {
 
         if (s.bessSimulationCommitted && typeof s.bessSimulationCommitted === 'object') {
           const b = s.bessSimulationCommitted
+          const legacySide =
+            b.roundtripEfficiencyPct != null &&
+            Number.isFinite(Number(b.roundtripEfficiencyPct))
+              ? Math.sqrt(Number(b.roundtripEfficiencyPct) / 100) * 100
+              : ''
+          const durationHours = [2, 3, 4, 6, 8].includes(Number(b.durationHours))
+            ? Number(b.durationHours)
+            : 2
           setBessSimulationCommitted(b)
           setBessSimulationInputs({
             startDate: b.startDate ?? '',
             endDate: b.endDate ?? '',
             capacityMw: b.capacityMw ?? '',
-            durationHours: b.durationHours === 4 ? 4 : 2,
-            roundtripEfficiency: b.roundtripEfficiencyPct ?? '',
+            durationHours,
+            chargingEfficiencyPct:
+              b.chargingEfficiencyPct ?? legacySide ?? '',
+            dischargingEfficiencyPct:
+              b.dischargingEfficiencyPct ?? legacySide ?? '',
             socLowerPct: b.socLowerPct ?? '',
             socUpperPct: b.socUpperPct ?? '',
             cyclesPerDayTarget: b.cyclesPerDayTarget ?? '',
