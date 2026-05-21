@@ -44,8 +44,8 @@ This app is split into three parts:
 ### 1.3 Database + storage
 
 1. **SQL Editor** → run the full script: [`supabase/schema.sql`](../supabase/schema.sql).
-2. **Storage** → New bucket **`simulation-results`** (private).  
-   Storage policies are included in `schema.sql`; if policies fail to create via SQL, add equivalent policies in the Dashboard.
+2. **Storage** → confirm buckets **`simulation-results`** and **`market-data`** (both private).  
+   Storage policies for user results are in `schema.sql`; `market-data` is written only by the API service role.
 
 ---
 
@@ -97,10 +97,31 @@ Set in Render → **Environment**:
 | `SUPABASE_URL` | `https://xxx.supabase.co` |
 | `SUPABASE_ANON_KEY` | anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | service role (secret) |
+| `CRON_SECRET` | Random secret for `POST /api/cron/refresh-market-data` (same value in GitHub Actions secrets) |
 
-Optional: `SERVE_STATIC=false` if you only serve API from Render (Netlify serves UI).
+Optional: `SERVE_STATIC=false` if you only serve API from Render (Netlify serves UI).  
+Optional: `DAY_AHEAD_DISABLE_API=true` or `PV_LIVE_DISABLE_API=true` to skip live upstream fallback when Supabase cache is empty.
+
+**Market data (free daily refresh):** GitHub Actions calls your Render API once per day. The job fetches [Ember GB day-ahead](https://files.ember-energy.org/public-downloads/price/outputs/european_wholesale_electricity_price_data_hourly.zip) + PV_Live yield and stores them in Supabase Storage bucket `market-data`. Each optimisation run downloads from Supabase (~fast) instead of re-fetching upstream.
 
 Copy your Render URL, e.g. `https://energy-analytics-api.onrender.com`.
+
+### 2.4 Daily market-data refresh (free — GitHub Actions)
+
+1. Supabase SQL Editor → run any **new** statements from [`supabase/schema.sql`](../supabase/schema.sql) (creates `market_data_refresh_log` + `market-data` bucket).
+2. Render → add `CRON_SECRET` (generate a long random string).
+3. GitHub repo → **Settings → Secrets and variables → Actions**:
+   - `RENDER_API_URL` = `https://energy-analytics-api-5u38.onrender.com` (your Render URL, no trailing slash)
+   - `CRON_SECRET` = same value as Render
+4. **Seed once** after deploy (Storage bucket must exist):
+   ```bash
+   curl -X POST "https://YOUR-API.onrender.com/api/cron/refresh-market-data" \
+     -H "X-Cron-Secret: YOUR_CRON_SECRET"
+   ```
+   Or locally: `cd web && npm run refresh:market-data`
+5. Workflow [`.github/workflows/refresh-market-data.yml`](../.github/workflows/refresh-market-data.yml) runs daily at 06:15 UTC. Use **Actions → Refresh market data → Run workflow** to test.
+
+Check status: `GET /api/health` → `marketData.manifest.updatedAt`.
 
 ---
 
@@ -191,8 +212,9 @@ USE_LEGACY_PROJECT_DIRS=true npm run dev
 
 ## 5. Checklist
 
-- [ ] Supabase: GitHub provider, redirect URLs, `schema.sql`, bucket `simulation-results`
-- [ ] Render: disk `/var/data`, Python deps, all env vars, service URL live
+- [ ] Supabase: GitHub provider, redirect URLs, `schema.sql`, buckets `simulation-results` + `market-data`
+- [ ] Render: env vars including `CRON_SECRET`, service URL live
+- [ ] GitHub Actions secrets: `RENDER_API_URL`, `CRON_SECRET`; seed market data once
 - [ ] Netlify: `VITE_SUPABASE_*`, API proxy or `VITE_API_BASE_URL`, `CORS_ORIGINS` on Render
 - [ ] End-to-end: guest run → download CSV → GitHub save → file in Storage
 
@@ -215,4 +237,5 @@ USE_LEGACY_PROJECT_DIRS=true npm run dev
 | Download 404 | Run optimisation first; check `results/` in workspace |
 | CORS errors | Match `CORS_ORIGINS` to exact Netlify URL; or use Netlify proxy |
 | Optimisation fails | SSH/logs on Render; confirm `pip3 install` for PuLP/CBC |
+| Day-ahead price flat after ~26 Mar 2026 | Seed Supabase market data (`POST /api/cron/refresh-market-data`). Check `/api/health` → `marketData.manifest`. |
 | Local paths wrong | `USE_LEGACY_PROJECT_DIRS=true` or clear `.data/workspaces` |

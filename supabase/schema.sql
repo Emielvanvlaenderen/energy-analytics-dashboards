@@ -1,5 +1,6 @@
 -- Run in Supabase SQL Editor after creating the project.
--- Storage bucket: create "simulation-results" (private) in Dashboard → Storage.
+-- Storage buckets: create "simulation-results" and "market-data" (private) in Dashboard → Storage,
+-- or run the insert below for market-data.
 
 create table if not exists public.saved_simulations (
   id uuid primary key default gen_random_uuid(),
@@ -15,6 +16,22 @@ create table if not exists public.saved_simulations (
 
 create index if not exists saved_simulations_user_project_idx
   on public.saved_simulations (user_id, project_id, created_at desc);
+
+-- Daily market-data refresh audit (written by API service role only).
+create table if not exists public.market_data_refresh_log (
+  id uuid primary key default gen_random_uuid(),
+  dataset text not null,
+  status text not null,
+  message text,
+  last_utc text,
+  row_count integer,
+  refreshed_at timestamptz not null default now()
+);
+
+create index if not exists market_data_refresh_log_refreshed_at_idx
+  on public.market_data_refresh_log (refreshed_at desc);
+
+alter table public.market_data_refresh_log enable row level security;
 
 alter table public.saved_simulations enable row level security;
 
@@ -57,3 +74,14 @@ create policy "Users delete own result files"
     bucket_id = 'simulation-results'
     and (storage.foldername(name))[1] = auth.uid()::text
   );
+
+-- Shared GB market datasets (day-ahead + PV yield). API uploads via service role only.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'market-data',
+  'market-data',
+  false,
+  52428800,
+  array['text/csv', 'application/json', 'text/plain']
+)
+on conflict (id) do nothing;

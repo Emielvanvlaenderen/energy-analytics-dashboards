@@ -2,7 +2,12 @@ import express from 'express'
 import fs from 'fs'
 import { attachAuth, isSupabaseConfigured } from './authCore.mjs'
 import { createProjectApiRouter } from './projectApiRouter.mjs'
+import { getMarketDataStatus } from './marketDataStore.mjs'
 import { getProjectById, PROJECTS } from './projectsRegistry.mjs'
+import {
+  executeRefreshMarketData,
+  verifyCronSecret,
+} from './refreshMarketDataCore.mjs'
 import {
   attachWorkspace,
   ensureWorkspaceSeeded,
@@ -17,11 +22,36 @@ export function createApiApp() {
 
   app.use(attachAuth)
 
-  app.get('/api/health', (req, res) => {
+  app.get('/api/health', async (req, res) => {
+    let marketData = null
+    try {
+      marketData = await getMarketDataStatus()
+    } catch {
+      /* optional */
+    }
     res.json({
       ok: true,
       supabase: isSupabaseConfigured(),
+      marketData,
     })
+  })
+
+  app.post('/api/cron/refresh-market-data', async (req, res) => {
+    if (!verifyCronSecret(req)) {
+      return res.status(401).json({
+        ok: false,
+        error: 'Unauthorized (set CRON_SECRET and X-Cron-Secret header).',
+      })
+    }
+    try {
+      const result = await executeRefreshMarketData()
+      return res.status(result.status).json(result)
+    } catch (e) {
+      return res.status(500).json({
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
   })
 
   app.get('/api/me', (req, res) => {

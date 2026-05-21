@@ -3,6 +3,8 @@ import fs from 'fs'
 import path from 'path'
 import { PROJECTS_DIR, REPO_ROOT } from './repoRoot.mjs'
 import { getProjectById } from './projectsRegistry.mjs'
+import { refreshDayAheadForStudy } from './dayAheadPrices.mjs'
+import { syncMarketDataToWorkspace } from './marketDataStore.mjs'
 import {
   PV_YIELD_FILE_CANDIDATES,
   SHARED_PV_YIELD_DATA_DIR,
@@ -69,7 +71,7 @@ export function resolveResultsPaths(req) {
   return req.paths ?? null
 }
 
-/** Copy extended day-ahead prices from repo template into this workspace. */
+/** Fallback when live day-ahead refresh fails entirely. */
 export function syncDayAheadFromTemplate(paths) {
   const src = path.join(paths.templateRoot, 'data', 'day-ahead-prices.csv')
   const dest = path.join(paths.dataDir, 'day-ahead-prices.csv')
@@ -78,8 +80,8 @@ export function syncDayAheadFromTemplate(paths) {
   fs.copyFileSync(src, dest)
 }
 
-/** Rebuild PV synthetic from PV_Live API yield × study installed MW. */
-export async function refreshPvFromStudy(paths, study) {
+/** Rebuild PV synthetic from shared yield × study installed MW. */
+export async function refreshPvFromStudy(paths, study, { preferLocalYield = false } = {}) {
   const form = study?.siteDataForm
   if (form?.pvChoice !== 'yes') return
   const mw = Number.parseFloat(String(form.pvInstalledMw ?? ''))
@@ -90,7 +92,8 @@ export async function refreshPvFromStudy(paths, study) {
       extraSearchDirs: [path.join(paths.templateRoot, 'data')],
       startDate,
       endDate,
-      useApi: true,
+      useApi: !preferLocalYield,
+      preferLocal: true,
     })
     if (!result?.ok) {
       console.warn('[pv] synthetic CSV:', result.error)
@@ -100,10 +103,16 @@ export async function refreshPvFromStudy(paths, study) {
   }
 }
 
-/** Day-ahead from template; PV from PV_Live API for study date range. */
+/** Day-ahead + PV yield from Supabase; live upstream fetch only if missing. */
 export async function refreshMarketDataForStudy(paths, study) {
-  syncDayAheadFromTemplate(paths)
-  await refreshPvFromStudy(paths, study)
+  const sync = await syncMarketDataToWorkspace(paths.dataDir)
+
+  if (!sync.dayAhead.ok) {
+    const da = await refreshDayAheadForStudy(paths, study)
+    if (!da.ok) syncDayAheadFromTemplate(paths)
+  }
+
+  await refreshPvFromStudy(paths, study, { preferLocalYield: sync.pvYield.ok })
 }
 
 export function ensureGuestSession(req, res) {

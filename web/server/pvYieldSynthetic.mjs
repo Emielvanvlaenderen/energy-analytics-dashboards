@@ -103,11 +103,26 @@ function writeYieldCache(dataDir, yieldRows) {
 }
 
 /**
- * Load yield from PV_Live API (preferred) or local CSV cache.
+ * Load yield from workspace / Supabase file, PV_Live API, or bundled CSV.
  * @param {string} dataDir
- * @param {{ startDate?: string, endDate?: string, useApi?: boolean }} options
+ * @param {{ startDate?: string, endDate?: string, useApi?: boolean, preferLocal?: boolean }} options
  */
-export async function loadYieldRows(dataDir, { startDate, endDate, useApi = true } = {}) {
+export async function loadYieldRows(
+  dataDir,
+  { startDate, endDate, useApi = true, preferLocal = true } = {},
+) {
+  const localPath = path.join(dataDir, PV_LIVE_YIELD_FILENAME)
+  if (preferLocal && fs.existsSync(localPath)) {
+    const rows = filterYieldToDateRange(
+      parseYieldCsvFile(localPath),
+      startDate,
+      endDate,
+    )
+    if (rows.length) {
+      return { rows, source: PV_LIVE_YIELD_FILENAME }
+    }
+  }
+
   const { startIso, endIso } = resolvePvFetchRange(startDate, endDate)
 
   if (useApi && process.env.PV_LIVE_DISABLE_API !== 'true') {
@@ -165,6 +180,7 @@ export async function writePvSyntheticFromYield(
     startDate,
     endDate,
     useApi = true,
+    preferLocal = true,
   } = {},
 ) {
   void extraSearchDirs
@@ -173,6 +189,7 @@ export async function writePvSyntheticFromYield(
     startDate,
     endDate,
     useApi,
+    preferLocal,
   })
 
   if (!yieldRows.length) {

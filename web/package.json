@@ -11,6 +11,7 @@
     "test:continue": "node server/test-continue.mjs",
     "build": "vite build",
     "start": "NODE_ENV=production node server/index.mjs",
+    "refresh:market-data": "node --env-file=.env.local server/jobs/refreshMarketData.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
