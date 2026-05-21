@@ -37,10 +37,17 @@ export function createApiApp() {
   })
 
   app.post('/api/cron/refresh-market-data', async (req, res) => {
+    const expected = process.env.CRON_SECRET?.trim()
+    if (!expected) {
+      return res.status(503).json({
+        ok: false,
+        error: 'CRON_SECRET is not set on this server (add it in Render → Environment).',
+      })
+    }
     if (!verifyCronSecret(req)) {
       return res.status(401).json({
         ok: false,
-        error: 'Unauthorized (set CRON_SECRET and X-Cron-Secret header).',
+        error: 'Unauthorized (X-Cron-Secret does not match Render CRON_SECRET).',
       })
     }
     try {
