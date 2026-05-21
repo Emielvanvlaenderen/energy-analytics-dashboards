@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import ws from 'ws'
 
 let adminClient = null
 
@@ -14,6 +15,7 @@ export function getSupabaseAdmin() {
   if (!adminClient) {
     adminClient = createClient(url, key, {
       auth: { autoRefreshToken: false, persistSession: false },
+      realtime: { transport: ws },
     })
   }
   return adminClient
