@@ -81,9 +81,10 @@ export function createProjectApiRouter() {
     return res.json({ ok: true, ...result })
   })
 
-  router.get('/bess-simulations', (req, res) => {
-    const result = executeListBessSimulations(req.projectId, {
+  router.get('/bess-simulations', async (req, res) => {
+    const result = await executeListBessSimulations(req.projectId, {
       paths: resolveResultsPaths(req),
+      userId: req.authUser?.id,
     })
     if (!result.ok) {
       return res.status(result.status).json({ ok: false, error: result.error })
@@ -93,12 +94,49 @@ export function createProjectApiRouter() {
       simulations: result.simulations,
       groups: result.groups,
       activeFile: result.activeFile,
+      activeSavedId: result.activeSavedId ?? null,
     })
   })
 
-  router.get('/bess-results', (req, res) => {
+  router.get('/bess-results', async (req, res) => {
     const file =
       typeof req.query.file === 'string' ? req.query.file : undefined
+    const savedId =
+      typeof req.query.savedId === 'string' ? req.query.savedId : undefined
+
+    if (savedId) {
+      if (!req.authUser) {
+        return res.status(401).json({
+          ok: false,
+          error: 'Sign in to view saved simulations.',
+        })
+      }
+      const dl = await executeDownloadSavedSimulation(
+        req.projectId,
+        req.authUser.id,
+        savedId,
+      )
+      if (!dl.ok) {
+        return res.status(dl.status).json({ ok: false, error: dl.error })
+      }
+      const text = dl.buffer.toString('utf8')
+      const label = `saved:${savedId}`
+      const result =
+        req.paths?.projectKind === 'v2g'
+          ? (await import('./v2gResultsCore.mjs')).parseV2gResultsFromCsvText(
+              text,
+              label,
+            )
+          : (await import('./bessResultsCore.mjs')).parseBessResultsFromCsvText(
+              text,
+              label,
+            )
+      if (!result.ok) {
+        return res.status(result.status).json({ ok: false, error: result.error })
+      }
+      return res.json(result)
+    }
+
     const resultPaths = { paths: resolveResultsPaths(req) }
     const result =
       req.paths?.projectKind === 'v2g'

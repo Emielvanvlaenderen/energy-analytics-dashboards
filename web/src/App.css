@@ -1004,6 +1004,16 @@ a.brand {
   border-radius: 8px;
 }
 
+.continue-section__success {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  font-size: 0.8125rem;
+  color: #166534;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+}
+
 .continue-section__note {
   margin: 12px 0 0;
   font-size: 0.75rem;

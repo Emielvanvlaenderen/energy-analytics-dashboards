@@ -15,6 +15,23 @@ import {
 
 const BUCKET = 'simulation-results'
 
+/** Map Supabase row → results picker entry (same shape as workspace CSV list). */
+export function mapSavedRowToSimulation(row) {
+  return {
+    savedId: row.id,
+    filename: row.results_filename,
+    simulationName: row.name,
+    parametersLabel: row.name,
+    parametersDisplay: row.name,
+    mtimeMs: new Date(row.created_at).getTime(),
+    isSaved: true,
+    isLegacy: false,
+    isPreRun: false,
+    siteDataLabel: '',
+    siteDataFlags: {},
+  }
+}
+
 export async function executeListSavedSimulations(projectId, userId) {
   if (!isSupabaseConfigured()) {
     return {

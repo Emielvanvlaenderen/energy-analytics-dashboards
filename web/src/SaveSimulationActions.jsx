@@ -8,15 +8,28 @@ import {
   projectFetch,
 } from './lib/api'
 import { readStoredGuestId } from './lib/guestSession'
+import { findSimulationByRunKey } from './lib/resultsSimulations'
 import { supabase } from './lib/supabaseClient'
 
-export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
+export function SaveSimulationActions({
+  apiBase,
+  selectedRunKey,
+  simulations,
+  saveLabel,
+  onSaved,
+}) {
   const { user, accessToken, signInWithGitHub, supabaseConfigured } = useAuth()
   const [saving, setSaving] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [message, setMessage] = useState(null)
+  const [messageKind, setMessageKind] = useState('error')
 
-  const canSave = Boolean(saveLabel?.trim() && selectedFile)
+  const selectedMeta = selectedRunKey
+    ? findSimulationByRunKey(simulations, selectedRunKey)
+    : null
+  const selectedFile = selectedMeta?.filename ?? null
+  const alreadySaved = Boolean(selectedMeta?.isSaved)
+  const canSave = Boolean(saveLabel?.trim() && selectedFile && !alreadySaved)
 
   async function resolveAccessToken() {
     if (supabase) {
@@ -34,6 +47,7 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
 
   async function downloadGuestCsv() {
     if (!selectedFile) {
+      setMessageKind('error')
       setMessage('Select a run first.')
       return
     }
@@ -47,6 +61,7 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
       const res = await projectFetch(`${apiBase}/bess-results/download?${q}`)
       if (!res.ok) {
         const { data } = await parseApiResponse(res)
+        setMessageKind('error')
         setMessage(formatApiError(res, data, 'Could not download CSV.'))
         return
       }
@@ -61,6 +76,7 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
       a.remove()
       URL.revokeObjectURL(url)
     } catch (e) {
+      setMessageKind('error')
       setMessage(e instanceof Error ? e.message : 'Could not download CSV.')
     } finally {
       setDownloading(false)
@@ -73,7 +89,13 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
       await signInWithGitHub()
       return
     }
+    if (alreadySaved) {
+      setMessageKind('success')
+      setMessage('This run is already saved to your account.')
+      return
+    }
     if (!canSave) {
+      setMessageKind('error')
       setMessage('Select a run first.')
       return
     }
@@ -82,6 +104,7 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
     try {
       const token = await resolveAccessToken()
       if (!token) {
+        setMessageKind('error')
         setMessage('Session expired. Sign out, then sign in with GitHub again.')
         return
       }
@@ -89,6 +112,7 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
       const meRes = await apiFetch('/api/me', { authToken: token })
       const { data: meData } = await parseApiResponse(meRes)
       if (!meRes.ok || !meData?.user?.id) {
+        setMessageKind('error')
         setMessage(
           'API could not verify your GitHub session. Confirm Netlify VITE_SUPABASE_URL matches Render SUPABASE_URL, then sign out and in again.',
         )
@@ -110,11 +134,15 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
       })
       const { data } = await parseApiResponse(res)
       if (!res.ok || !data.ok) {
+        setMessageKind('error')
         setMessage(formatApiError(res, data, 'Could not save.'))
         return
       }
+      setMessageKind('success')
       setMessage('Saved to your account.')
+      onSaved?.()
     } catch (e) {
+      setMessageKind('error')
       setMessage(e instanceof Error ? e.message : 'Could not save.')
     } finally {
       setSaving(false)
@@ -139,19 +167,28 @@ export function SaveSimulationActions({ apiBase, selectedFile, saveLabel }) {
           <button
             type="button"
             className="btn btn--primary"
-            disabled={saving || (user ? !canSave : false)}
+            disabled={saving || (user ? !canSave && !alreadySaved : false)}
             onClick={saveToAccount}
           >
             {saving
               ? 'Saving…'
               : user
-                ? 'Save to my account'
+                ? alreadySaved
+                  ? 'Saved to my account'
+                  : 'Save to my account'
                 : 'Sign in with GitHub to save'}
           </button>
         ) : null}
       </div>
       {message ? (
-        <p className="continue-section__error" role="status">
+        <p
+          className={
+            messageKind === 'success'
+              ? 'continue-section__success'
+              : 'continue-section__error'
+          }
+          role="status"
+        >
           {message}
         </p>
       ) : null}

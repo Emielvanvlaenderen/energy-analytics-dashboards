@@ -4,12 +4,19 @@ import ReactEcharts from 'echarts-for-react'
 import { BRAND, BRAND_ACCENT } from './brand'
 import {
   buildSavedSimulationName,
-  findSimulationMeta,
   formatRunOptionLabel,
   formatSimulationGroupOption,
   groupSimulationsByName,
 } from './simulationFilename'
-import { formatApiError, parseApiResponse, projectFetch } from './lib/api'
+import { formatApiError } from './lib/api'
+import {
+  fetchResultsPayload,
+  fetchSimulationList,
+  findSimulationByRunKey,
+  runKeyFromActive,
+  runSelectValue,
+} from './lib/resultsSimulations'
+import { useAuth } from './AuthContext'
 import { useProjectApi } from './useProjectApi'
 import { SaveSimulationActions } from './SaveSimulationActions'
 
@@ -378,6 +385,7 @@ function extractDataZoomRange(params) {
 
 export function V2gResultsPage() {
   const apiBase = useProjectApi()
+  const { accessToken } = useAuth()
   const socEcRef = useRef(null)
   const cumulativeEcRef = useRef(null)
   const siteEcRef = useRef(null)
@@ -385,7 +393,8 @@ export function V2gResultsPage() {
   const [simulations, setSimulations] = useState([])
   const [groups, setGroups] = useState([])
   const [selectedSimulationName, setSelectedSimulationName] = useState(null)
-  const [selectedFile, setSelectedFile] = useState(null)
+  const [selectedRunKey, setSelectedRunKey] = useState(null)
+  const [listVersion, setListVersion] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [payload, setPayload] = useState(null)
@@ -395,8 +404,10 @@ export function V2gResultsPage() {
     let cancelled = false
     ;(async () => {
       try {
-        const simRes = await projectFetch(`${apiBase}/bess-simulations`)
-        const { data: simData } = await parseApiResponse(simRes)
+        const { res: simRes, data: simData } = await fetchSimulationList(
+          apiBase,
+          accessToken,
+        )
         if (cancelled) return
         if (!simRes.ok || !simData.ok) {
           setError(formatApiError(simRes, simData, 'Could not list simulations.'))
@@ -415,17 +426,22 @@ export function V2gResultsPage() {
           setLoading(false)
           return
         }
-        const file = simData.activeFile || list[0]?.filename || null
-        const activeMeta = file ? findSimulationMeta(list, file) : null
+        const runKey =
+          runKeyFromActive(simData.activeFile, simData.activeSavedId) ||
+          runSelectValue(grouped[0]?.runs[0] ?? list[0])
+        const activeMeta = runKey ? findSimulationByRunKey(list, runKey) : null
         const initialName =
           activeMeta?.simulationName ?? grouped[0]?.simulationName ?? null
         const initialGroup = grouped.find((g) => g.simulationName === initialName)
-        const initialFile =
-          file && initialGroup?.runs.some((r) => r.filename === file)
-            ? file
-            : initialGroup?.runs[0]?.filename ?? list[0]?.filename ?? null
+        const initialRunKey =
+          runKey &&
+          initialGroup?.runs.some((r) => runSelectValue(r) === runKey)
+            ? runKey
+            : initialGroup?.runs[0]
+              ? runSelectValue(initialGroup.runs[0])
+              : runSelectValue(list[0])
         setSelectedSimulationName(initialName)
-        setSelectedFile(initialFile)
+        setSelectedRunKey(initialRunKey)
         setLoading(false)
       } catch (e) {
         if (!cancelled) {
@@ -437,19 +453,20 @@ export function V2gResultsPage() {
     return () => {
       cancelled = true
     }
-  }, [apiBase])
+  }, [apiBase, accessToken, listVersion])
 
   useEffect(() => {
-    if (!selectedFile) return
+    if (!selectedRunKey) return
     let cancelled = false
     ;(async () => {
       setLoading(true)
       setError(null)
       try {
-        const res = await projectFetch(
-          `${apiBase}/bess-results?file=${encodeURIComponent(selectedFile)}`,
+        const { res, data } = await fetchResultsPayload(
+          apiBase,
+          selectedRunKey,
+          accessToken,
         )
-        const { data } = await parseApiResponse(res)
         if (cancelled) return
         if (!res.ok || !data.ok) {
           setError(formatApiError(res, data, 'Could not load results.'))
@@ -469,7 +486,7 @@ export function V2gResultsPage() {
     return () => {
       cancelled = true
     }
-  }, [selectedFile, apiBase])
+  }, [selectedRunKey, apiBase, accessToken])
 
   useEffect(() => {
     setCumulativeZoom({ start: 0, end: 100 })
@@ -481,14 +498,17 @@ export function V2gResultsPage() {
   }, [groups, selectedSimulationName])
 
   const saveLabel = useMemo(() => {
-    const meta = selectedFile ? findSimulationMeta(simulations, selectedFile) : null
+    const meta = selectedRunKey
+      ? findSimulationByRunKey(simulations, selectedRunKey)
+      : null
     if (!meta) return ''
+    if (meta.isSaved) return meta.simulationName || meta.parametersDisplay || ''
     return buildSavedSimulationName(
       meta.simulationName,
       meta.parametersDisplay,
       meta.parametersLabel,
     )
-  }, [simulations, selectedFile])
+  }, [simulations, selectedRunKey])
 
   const socOption = useMemo(
     () =>
@@ -596,7 +616,7 @@ export function V2gResultsPage() {
                 const name = e.target.value
                 setSelectedSimulationName(name)
                 const g = groups.find((x) => x.simulationName === name)
-                setSelectedFile(g?.runs[0]?.filename ?? null)
+                setSelectedRunKey(g?.runs[0] ? runSelectValue(g.runs[0]) : null)
               }}
             >
               {groups.map((g) => (
@@ -610,12 +630,12 @@ export function V2gResultsPage() {
             <span className="field__label">Run (parameters)</span>
             <select
               className="results-page__select"
-              value={selectedFile ?? ''}
+              value={selectedRunKey ?? ''}
               disabled={loading || runsForSelectedName.length === 0}
-              onChange={(e) => setSelectedFile(e.target.value || null)}
+              onChange={(e) => setSelectedRunKey(e.target.value || null)}
             >
               {runsForSelectedName.map((s) => (
-                <option key={s.filename} value={s.filename}>
+                <option key={runSelectValue(s)} value={runSelectValue(s)}>
                   {formatRunOptionLabel(s)}
                 </option>
               ))}
@@ -738,8 +758,10 @@ export function V2gResultsPage() {
 
       <SaveSimulationActions
         apiBase={apiBase}
-        selectedFile={selectedFile}
+        selectedRunKey={selectedRunKey}
+        simulations={simulations}
         saveLabel={saveLabel}
+        onSaved={() => setListVersion((v) => v + 1)}
       />
     </div>
   )

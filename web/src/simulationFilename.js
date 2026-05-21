@@ -26,6 +26,9 @@ export function findSimulationMeta(simulations, filename) {
 /** Simulation name dropdown — pre-run uses one group; PV/load shown on run picker. */
 export function formatSimulationGroupOption(group) {
   const run = group.runs?.[0]
+  if (run?.isSaved) {
+    return run.simulationName || 'Saved run'
+  }
   if (run?.isPreRun || group.simulationName === 'Pre-run_demo') {
     return 'Pre-run (demo)'
   }

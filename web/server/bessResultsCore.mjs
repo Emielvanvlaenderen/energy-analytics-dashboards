@@ -58,9 +58,12 @@ function aggregateAddedByMonth(tMs, wholesaleAdded, importAdded, exportAdded) {
 }
 
 /**
- * Lists `*.csv` files in `results/`, newest first.
+ * Lists workspace CSVs plus saved account runs when `userId` is set.
  */
-export function executeListBessSimulations(projectId, { paths: pathsIn } = {}) {
+export async function executeListBessSimulations(
+  projectId,
+  { paths: pathsIn, userId } = {},
+) {
   const paths = pathsIn ?? resolveProjectPaths(projectId)
   if (!paths) return projectNotFound(projectId)
 
@@ -86,7 +89,7 @@ export function executeListBessSimulations(projectId, { paths: pathsIn } = {}) {
 
     const siteForm = readSiteDataForm(paths)
 
-    const simulations = stats.map(({ filename, mtimeMs, isPreRun }) => {
+    let simulations = stats.map(({ filename, mtimeMs, isPreRun }) => {
       const parsed = parseSimulationFilename(filename)
       const { parametersLabel, isLegacy } = parsed
       const simulationName = isPreRun
@@ -109,11 +112,32 @@ export function executeListBessSimulations(projectId, { paths: pathsIn } = {}) {
         siteDataFlags,
         isLegacy,
         isPreRun: Boolean(isPreRun),
+        isSaved: false,
       }
     })
 
-    const groups = groupSimulationsByName(simulations)
+    let activeSavedId = null
+    if (userId) {
+      const { executeListSavedSimulations, mapSavedRowToSimulation } =
+        await import('./savedSimulationsCore.mjs')
+      const saved = await executeListSavedSimulations(projectId, userId)
+      if (saved.ok && saved.simulations?.length) {
+        const savedRuns = saved.simulations.map(mapSavedRowToSimulation)
+        simulations = [...savedRuns, ...simulations]
+        const onlyPreRun =
+          stats.length > 0 && stats.every((s) => s.isPreRun)
+        if (!activeFile || onlyPreRun) {
+          activeSavedId = savedRuns[0].savedId
+          activeFile = savedRuns[0].filename
+        }
+      }
+    }
+
+    let groups = groupSimulationsByName(simulations)
     groups.sort((a, b) => {
+      const aSaved = a.runs.some((r) => r.isSaved)
+      const bSaved = b.runs.some((r) => r.isSaved)
+      if (aSaved !== bSaved) return aSaved ? -1 : 1
       const aPre = a.runs.some((r) => r.isPreRun)
       const bPre = b.runs.some((r) => r.isPreRun)
       if (aPre !== bPre) return aPre ? -1 : 1
@@ -128,6 +152,7 @@ export function executeListBessSimulations(projectId, { paths: pathsIn } = {}) {
       simulations,
       groups,
       activeFile,
+      activeSavedId,
     }
   } catch (e) {
     console.error(e)
@@ -139,11 +164,130 @@ export function executeListBessSimulations(projectId, { paths: pathsIn } = {}) {
   }
 }
 
+export function parseBessResultsFromCsvText(text, resultsPath = 'results.csv') {
+  const lines = text.split(/\r?\n/).filter((l) => l.length > 0)
+  if (lines.length < 2) {
+    return { ok: false, status: 400, error: 'Results CSV is empty.' }
+  }
+
+  const headers = parseCsvLine(lines[0])
+  const col = (name) => headers.indexOf(name)
+
+  const iUtc = col('timestamp_UTC')
+  const iPv = col('ov_MW')
+  const iCons = col('cons_MW')
+  const iSite = col('site_MW')
+  const iAction = col('action')
+  const iDa = col('settlement_price')
+  const iImp = col('import_costs')
+  const iExp = col('export_costs')
+  const iCharge = col('charge')
+  const iDischarge = col('discharge')
+  const iSoc = col('soc')
+  const iWholesaleAdded = col('wholesale_added')
+  const iImportAdded = col('import_added')
+  const iExportAdded = col('export_added')
+  if (
+    iUtc < 0 ||
+    iPv < 0 ||
+    iCons < 0 ||
+    iSite < 0 ||
+    iAction < 0 ||
+    iDa < 0 ||
+    iImp < 0 ||
+    iExp < 0 ||
+    iCharge < 0 ||
+    iDischarge < 0 ||
+    iSoc < 0 ||
+    iWholesaleAdded < 0 ||
+    iImportAdded < 0 ||
+    iExportAdded < 0
+  ) {
+    return {
+      ok: false,
+      status: 400,
+      error:
+        'Results CSV is missing required columns (timestamp_UTC, ov_MW, cons_MW, site_MW, action, settlement_price, import_costs, export_costs, charge, discharge, soc, wholesale_added, import_added, export_added).',
+    }
+  }
+
+  const tMs = []
+  const pv = []
+  const siteOfftake = []
+  const siteMw = []
+  const action = []
+  const settlementPrice = []
+  const importCosts = []
+  const exportCosts = []
+  const chargeMw = []
+  const dischargeMw = []
+  const socPct = []
+  const wholesaleAdded = []
+  const importAdded = []
+  const exportAdded = []
+
+  for (let r = 1; r < lines.length; r++) {
+    const cols = parseCsvLine(lines[r])
+    const ts = cols[iUtc]
+    const ms = Date.parse(ts)
+    if (!Number.isFinite(ms)) continue
+    tMs.push(ms)
+    pv.push(Number.parseFloat(cols[iPv]))
+    siteOfftake.push(Number.parseFloat(cols[iCons]))
+    siteMw.push(Number.parseFloat(cols[iSite]))
+    action.push(Number.parseFloat(cols[iAction]))
+    settlementPrice.push(Number.parseFloat(cols[iDa]))
+    importCosts.push(Number.parseFloat(cols[iImp]))
+    exportCosts.push(Number.parseFloat(cols[iExp]))
+    chargeMw.push(Number.parseFloat(cols[iCharge]))
+    dischargeMw.push(Number.parseFloat(cols[iDischarge]))
+    socPct.push(Number.parseFloat(cols[iSoc]))
+    wholesaleAdded.push(Number.parseFloat(cols[iWholesaleAdded]))
+    importAdded.push(Number.parseFloat(cols[iImportAdded]))
+    exportAdded.push(Number.parseFloat(cols[iExportAdded]))
+  }
+
+  const totalImportPrice = tMs.map((_, i) => settlementPrice[i] + importCosts[i])
+  const totalExportPrice = tMs.map((_, i) => settlementPrice[i] - exportCosts[i])
+
+  const monthlyAdded = aggregateAddedByMonth(
+    tMs,
+    wholesaleAdded,
+    importAdded,
+    exportAdded,
+  )
+
+  return {
+    ok: true,
+    status: 200,
+    resultsPath,
+    rowCount: tMs.length,
+    monthlyAdded,
+    series: {
+      tMs,
+      pv,
+      siteOfftake,
+      siteMw,
+      action,
+      settlementPrice,
+      importCosts,
+      exportCosts,
+      totalImportPrice,
+      totalExportPrice,
+      chargeMw,
+      dischargeMw,
+      socPct,
+      wholesaleAdded,
+      importAdded,
+      exportAdded,
+    },
+  }
+}
+
 export { resolveResultsCsvPath }
 
 /**
  * Reads a BESS results CSV and returns compact arrays for charting.
- * @param {{ file?: string }} [query] — optional `file` = basename under `results/`
  */
 export function executeGetBessResults(projectId, query = {}, { paths: pathsIn } = {}) {
   const paths = pathsIn ?? resolveProjectPaths(projectId)
@@ -159,133 +303,11 @@ export function executeGetBessResults(projectId, query = {}, { paths: pathsIn } 
       }
     }
     const csvPath = resolved.csvPath
-
     if (!csvPath) {
       return { ok: false, status: 404, error: 'No results file resolved.' }
     }
-
     const text = fs.readFileSync(csvPath, 'utf8')
-    const lines = text.split(/\r?\n/).filter((l) => l.length > 0)
-    if (lines.length < 2) {
-      return { ok: false, status: 400, error: 'Results CSV is empty.' }
-    }
-
-    const headers = parseCsvLine(lines[0])
-    const col = (name) => headers.indexOf(name)
-
-    const iUtc = col('timestamp_UTC')
-    const iPv = col('ov_MW')
-    const iCons = col('cons_MW')
-    const iSite = col('site_MW')
-    const iAction = col('action')
-    const iDa = col('settlement_price')
-    const iImp = col('import_costs')
-    const iExp = col('export_costs')
-    const iCharge = col('charge')
-    const iDischarge = col('discharge')
-    const iSoc = col('soc')
-    const iWholesaleAdded = col('wholesale_added')
-    const iImportAdded = col('import_added')
-    const iExportAdded = col('export_added')
-    if (
-      iUtc < 0 ||
-      iPv < 0 ||
-      iCons < 0 ||
-      iSite < 0 ||
-      iAction < 0 ||
-      iDa < 0 ||
-      iImp < 0 ||
-      iExp < 0 ||
-      iCharge < 0 ||
-      iDischarge < 0 ||
-      iSoc < 0 ||
-      iWholesaleAdded < 0 ||
-      iImportAdded < 0 ||
-      iExportAdded < 0
-    ) {
-      return {
-        ok: false,
-        status: 400,
-        error:
-          'Results CSV is missing required columns (timestamp_UTC, ov_MW, cons_MW, site_MW, action, settlement_price, import_costs, export_costs, charge, discharge, soc, wholesale_added, import_added, export_added).',
-      }
-    }
-
-    const tMs = []
-    const pv = []
-    const siteOfftake = []
-    const siteMw = []
-    const action = []
-    const settlementPrice = []
-    const importCosts = []
-    const exportCosts = []
-    const chargeMw = []
-    const dischargeMw = []
-    const socPct = []
-    const wholesaleAdded = []
-    const importAdded = []
-    const exportAdded = []
-
-    for (let r = 1; r < lines.length; r++) {
-      const cols = parseCsvLine(lines[r])
-      const ts = cols[iUtc]
-      const ms = Date.parse(ts)
-      if (!Number.isFinite(ms)) continue
-      tMs.push(ms)
-      pv.push(Number.parseFloat(cols[iPv]))
-      siteOfftake.push(Number.parseFloat(cols[iCons]))
-      siteMw.push(Number.parseFloat(cols[iSite]))
-      action.push(Number.parseFloat(cols[iAction]))
-      settlementPrice.push(Number.parseFloat(cols[iDa]))
-      importCosts.push(Number.parseFloat(cols[iImp]))
-      exportCosts.push(Number.parseFloat(cols[iExp]))
-      chargeMw.push(Number.parseFloat(cols[iCharge]))
-      dischargeMw.push(Number.parseFloat(cols[iDischarge]))
-      socPct.push(Number.parseFloat(cols[iSoc]))
-      wholesaleAdded.push(Number.parseFloat(cols[iWholesaleAdded]))
-      importAdded.push(Number.parseFloat(cols[iImportAdded]))
-      exportAdded.push(Number.parseFloat(cols[iExportAdded]))
-    }
-
-    /**
-     * Day-ahead uses settlement_price from results CSV.
-     * import_price = day-ahead + import_cost; export_price = day-ahead − export_cost.
-     */
-    const totalImportPrice = tMs.map((_, i) => settlementPrice[i] + importCosts[i])
-    const totalExportPrice = tMs.map((_, i) => settlementPrice[i] - exportCosts[i])
-
-    const monthlyAdded = aggregateAddedByMonth(
-      tMs,
-      wholesaleAdded,
-      importAdded,
-      exportAdded,
-    )
-
-    return {
-      ok: true,
-      status: 200,
-      resultsPath: csvPath,
-      rowCount: tMs.length,
-      monthlyAdded,
-      series: {
-        tMs,
-        pv,
-        siteOfftake,
-        siteMw,
-        action,
-        settlementPrice,
-        importCosts,
-        exportCosts,
-        totalImportPrice,
-        totalExportPrice,
-        chargeMw,
-        dischargeMw,
-        socPct,
-        wholesaleAdded,
-        importAdded,
-        exportAdded,
-      },
-    }
+    return parseBessResultsFromCsvText(text, csvPath)
   } catch (e) {
     console.error(e)
     return {
