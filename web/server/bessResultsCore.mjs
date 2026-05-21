@@ -1,9 +1,7 @@
 import fs from 'fs'
 import path from 'path'
-import {
-  buildRunSummaryFromStudy,
-  readStudyInputsForRunSummary,
-} from './runSummaryCore.mjs'
+import { buildRunSummaryFromStudy } from './runSummaryCore.mjs'
+import { resolveStudyForRunSummary } from './preRunStudySnapshot.mjs'
 import {
   formatParametersLabel,
   groupSimulationsByName,
@@ -319,7 +317,7 @@ export function executeGetBessResults(projectId, query = {}, { paths: pathsIn } 
     const text = fs.readFileSync(csvPath, 'utf8')
     const parsed = parseBessResultsFromCsvText(text, csvPath)
     if (!parsed.ok) return parsed
-    const study = readStudyInputsForRunSummary(paths)
+    const study = resolveStudyForRunSummary(paths, projectId, csvPath)
     const runSummary = buildRunSummaryFromStudy(study, { projectKind: 'ci-bess' })
     return { ...parsed, runSummary }
   } catch (e) {

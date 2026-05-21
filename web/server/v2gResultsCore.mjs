@@ -7,8 +7,8 @@ import { resolveResultsCsvPath } from './preRunResults.mjs'
 import { projectNotFound, resolveProjectPaths } from './projectPaths.mjs'
 import {
   buildRunSummaryFromStudy,
-  readStudyInputsForRunSummary,
 } from './runSummaryCore.mjs'
+import { resolveStudyForRunSummary } from './preRunStudySnapshot.mjs'
 
 export { executeListBessSimulations as executeListV2gSimulations }
 export { parseBessResultsFromCsvText }
@@ -153,7 +153,7 @@ export function executeGetV2gResults(projectId, query = {}, { paths: pathsIn } =
     const text = fs.readFileSync(csvPath, 'utf8')
     const parsed = parseV2gResultsFromCsvText(text, csvPath)
     if (!parsed.ok) return parsed
-    const study = readStudyInputsForRunSummary(paths)
+    const study = resolveStudyForRunSummary(paths, projectId, csvPath)
     const runSummary = buildRunSummaryFromStudy(study, { projectKind: 'v2g' })
     return { ...parsed, runSummary }
   } catch (e) {
