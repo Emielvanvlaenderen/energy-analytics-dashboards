@@ -70,10 +70,10 @@ const SHARED = {
   v2gSimulationCommitted: {
     startDate: '2024-01-01',
     endDate: '2026-05-01',
-    capacityMw: 7,
-    durationHours: 8,
-    energyBessMwh: 56,
-    maxPowerBessMw: 7,
+    capacityMw: 1,
+    durationHours: 2,
+    energyBessMwh: 2,
+    maxPowerBessMw: 1,
     socLowerPct: 20,
     socUpperPct: 90,
     returnSocPct: 30,
@@ -278,9 +278,19 @@ function runOptimisation(paths) {
   return resultsCsv
 }
 
-function moveToPreRun(resultsCsv, paths) {
+function moveToPreRun(resultsCsv, paths, scenario) {
   const preRunDir = getPreRunResultsDir(paths.templateRoot)
-  const dest = path.join(preRunDir, path.basename(resultsCsv))
+  let destName = path.basename(resultsCsv)
+  if (scenario?.simulationName) {
+    const pv = scenario.pvChoice === 'yes' ? 'pvY' : 'pvN'
+    const load = scenario.consumptionChoice === 'yes' ? 'loadY' : 'loadN'
+    const stem = destName.replace(/\.csv$/i, '')
+    const parts = stem.split('__')
+    const simSlug = parts[0]
+    const rest = parts.slice(1).join('__')
+    destName = `${simSlug}__${pv}__${load}__${rest}.csv`
+  }
+  const dest = path.join(preRunDir, destName)
   fs.mkdirSync(preRunDir, { recursive: true })
   fs.renameSync(resultsCsv, dest)
   console.log(`  Stored ${path.relative(REPO_ROOT, dest)}`)
@@ -296,10 +306,28 @@ async function runProjectScenario(projectId, scenarioKey) {
   runTariffs(paths)
   await writeSiteCsvs(paths, scenario)
   const csv = runOptimisation(paths)
-  moveToPreRun(csv, paths)
+  moveToPreRun(csv, paths, scenario)
+}
+
+function deleteV2gPreRunResults() {
+  const preRunDir = getPreRunResultsDir(
+    path.join(REPO_ROOT, 'projects', 'v2g-uk'),
+  )
+  rmCsvRecursive(preRunDir)
 }
 
 async function main() {
+  if (process.env.V2G_ONLY === '1') {
+    console.log('Regenerating V2G pre-run demo only…')
+    deleteV2gPreRunResults()
+    for (const scenarioKey of ['noSite', 'withSite']) {
+      console.log(`\n=== v2g-uk / ${scenarioKey} ===`)
+      await runProjectScenario('v2g-uk', scenarioKey)
+    }
+    console.log('\nV2G pre-run results updated.')
+    return
+  }
+
   deleteAllResults()
   const order = [
     ['ci-bess-uk', 'noSite'],
